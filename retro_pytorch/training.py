@@ -1,27 +1,26 @@
-import numpy as np
-from functools import partial
 import json
+from functools import partial
 from pathlib import Path
 
+import numpy as np
 import torch
-from torch import nn
 import torch.nn.functional as F
+from einops import rearrange
+from torch import nn
 from torch.utils.data import DataLoader
 
-from retro_pytorch.retro_pytorch import RETRO
 from retro_pytorch.data import RETRODataset, knn_to_retrieved_chunks
 from retro_pytorch.optimizer import get_optimizer
 from retro_pytorch.retrieval import (
-    text_folder_to_chunks_,
-    chunks_to_precalculated_knn_,
-    bert_embed,
-    SOS_ID,
     EOS_ID,
     PAD_TOKEN,
+    SOS_ID,
+    bert_embed,
+    chunks_to_precalculated_knn_,
+    text_folder_to_chunks_,
 )
-from retro_pytorch.utils import memmap, is_true_env_flag
-
-from einops import rearrange
+from retro_pytorch.retro_pytorch import RETRO
+from retro_pytorch.utils import is_true_env_flag, memmap
 
 # helpers
 
@@ -126,9 +125,7 @@ def knn_chunks_from_seq_chunks(
         seq_chunks = torch.cat((sos, seq_chunks, eos), dim=1)
 
     # embed with frozen MODEL
-    embeds = bert_embed(
-        seq_chunks.cpu(), isdecoder=isdecoder
-    )  # fetch embeds on CPU for now # seq_chunks.cpu()
+    embeds = bert_embed(seq_chunks.cpu(), isdecoder=isdecoder)  # fetch embeds on CPU for now # seq_chunks.cpu()
 
     # retrieval of knn with faiss
 
@@ -136,12 +133,8 @@ def knn_chunks_from_seq_chunks(
 
     # numpy to torch
 
-    with memmap(
-        chunks_memmap_path, dtype=np.int32, shape=(num_chunks + 1, chunk_size + 1)
-    ) as chunk_memmap:
-        knn_chunks = knn_to_retrieved_chunks(
-            knn_indices, chunk_memmap, add_continuations=True, num_chunks=num_chunks
-        )
+    with memmap(chunks_memmap_path, dtype=np.int32, shape=(num_chunks + 1, chunk_size + 1)) as chunk_memmap:
+        knn_chunks = knn_to_retrieved_chunks(knn_indices, chunk_memmap, add_continuations=True, num_chunks=num_chunks)
 
         knn_chunks_torch = torch.from_numpy(knn_chunks).to(device)
 
@@ -275,15 +268,11 @@ class TrainingWrapper(nn.Module):
         # global neighbor_doc_ids, neighbor_from_same_doc, distances
 
         b, seq_len = seq.shape
-        past_seq_chunks = rearrange(
-            seq[:, :-1], "b (n c) -> (b n) c", c=self.chunk_size
-        )
+        past_seq_chunks = rearrange(seq[:, :-1], "b (n c) -> (b n) c", c=self.chunk_size)
         ### chunks, that have only PAD_TOKEN are marked, so that retrieve results to be put to PAD_TOKEN too.
         zero_ind = torch.all(past_seq_chunks == PAD_TOKEN, dim=-1)
 
-        sos = SOS_ID * torch.ones(
-            (past_seq_chunks.shape[0], 1), dtype=torch.bool, device=seq.device
-        )
+        sos = SOS_ID * torch.ones((past_seq_chunks.shape[0], 1), dtype=torch.bool, device=seq.device)
         past_seq_chunks = torch.cat((sos, past_seq_chunks), dim=1)
 
         total_neighbors_to_fetch = self.knn_extra_neighbors + self.knn + 1
@@ -306,9 +295,7 @@ class TrainingWrapper(nn.Module):
             # mask out any neighbors that belong to the same document to -1
             neighbor_doc_ids = doc_ids_storage[indices]
             # print(neighbor_doc_ids, file = print_file)
-            neighbor_from_same_doc = (
-                doc_except.flatten().numpy()[..., np.newaxis] == neighbor_doc_ids
-            )
+            neighbor_from_same_doc = doc_except.flatten().numpy()[..., np.newaxis] == neighbor_doc_ids
             # print(neighbor_from_same_doc, file = print_file)
             # print(distances, file = print_file)
             #####indices = np.where(neighbor_from_same_doc, -1, indices)
@@ -366,9 +353,7 @@ class TrainingWrapper(nn.Module):
 
         if start_seq_len >= self.chunk_size:
             seq_index = (start_seq_len // self.chunk_size) * self.chunk_size
-            past_seq_chunks = rearrange(
-                start[:, :seq_index], "b (n c) -> (b n) c", c=self.chunk_size
-            )
+            past_seq_chunks = rearrange(start[:, :seq_index], "b (n c) -> (b n) c", c=self.chunk_size)
 
             retrieved = self.fetch_knn_chunks_fn(past_seq_chunks, pad_with_os=True)
             retrieved = rearrange(retrieved, "(b n) k c -> b n k c", b=b)
@@ -407,9 +392,7 @@ class TrainingWrapper(nn.Module):
             curr_seq_len = out.shape[-1]
 
             if (curr_seq_len % self.chunk_size) == 0:
-                last_chunk = rearrange(out, "b (c n) -> b c n", n=self.chunk_size)[
-                    :, -1
-                ]
+                last_chunk = rearrange(out, "b (c n) -> b c n", n=self.chunk_size)[:, -1]
 
                 knn_chunks = self.fetch_knn_chunks_fn(last_chunk)
 

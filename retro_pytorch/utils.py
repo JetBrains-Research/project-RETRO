@@ -6,7 +6,6 @@ from shutil import rmtree
 import numpy as np
 
 
-
 def is_true_env_flag(env_flag):
     return os.getenv(env_flag, "false").lower() in ("true", "1", "t")
 

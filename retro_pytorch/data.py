@@ -1,12 +1,12 @@
 from functools import partial
+
 import numpy as np
 import torch
-from torch.utils.data import Dataset
 import torch.nn.functional as F
+from torch.utils.data import Dataset
 
 from retro_pytorch.retrieval import EOS_ID
 from retro_pytorch.utils import memmap
-
 
 # knn to retrieved chunks
 
@@ -36,9 +36,7 @@ def knn_to_retrieved_chunks(
     retrieved = knn_chunks[..., :-1]
 
     if add_continuations:
-        continuation_indices = np.clip(
-            knns + 1, 0, num_chunks - 1
-        )  # chunks are stored contiguously
+        continuation_indices = np.clip(knns + 1, 0, num_chunks - 1)  # chunks are stored contiguously
         continuation_chunks = chunks_memmap[continuation_indices][..., :-1]
         continuation_chunks *= ~is_last_document_chunk
 
@@ -84,15 +82,9 @@ class RETRODataset(Dataset):
         knn_shape = (num_chunks_with_padding, num_neighbors)
 
         self.add_continuations = add_continuations
-        self.get_chunks = partial(
-            memmap, chunk_memmap_path, dtype=np.int32, shape=chunks_shape
-        )
-        self.get_knns = partial(
-            memmap, chunk_nn_memmap_path, dtype=np.int32, shape=knn_shape
-        )
-        self.get_seqs = partial(
-            memmap, seq_memmap_path, dtype=np.int32, shape=(num_sequences,)
-        )
+        self.get_chunks = partial(memmap, chunk_memmap_path, dtype=np.int32, shape=chunks_shape)
+        self.get_knns = partial(memmap, chunk_nn_memmap_path, dtype=np.int32, shape=knn_shape)
+        self.get_seqs = partial(memmap, seq_memmap_path, dtype=np.int32, shape=(num_sequences,))
 
     def __len__(self):
         return self.num_sequences
@@ -101,9 +93,7 @@ class RETRODataset(Dataset):
         # global begin_chunk_index, chunk_range, chunks, seq_tokens_, seq_tokens, seq_mask, seq_mask_
         with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_seqs() as seqs_memmap:
             begin_chunk_index = seqs_memmap[ind]
-            chunk_range = slice(
-                begin_chunk_index, (begin_chunk_index + self.seq_num_chunks)
-            )
+            chunk_range = slice(begin_chunk_index, (begin_chunk_index + self.seq_num_chunks))
             # print(chunk_range)
             chunks = chunks_memmap[chunk_range]
 
@@ -137,10 +127,12 @@ class RETRODataset(Dataset):
 Dataset for the reading data from jsonl file
 """
 
+import os
+
 import jsonlines
 from torch.utils.data import DataLoader
+
 from retro_pytorch.retrieval import doc_text_to_chunks_and_seq_indices
-import os
 
 
 def split_into_chunks(seq_tokens, seq_length, pad_id=0):

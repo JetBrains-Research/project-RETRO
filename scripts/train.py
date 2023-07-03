@@ -1,6 +1,7 @@
-import torch
-import numpy as np
 import random
+
+import numpy as np
+import torch
 
 seed = 1111
 random.seed(seed)
@@ -9,11 +10,13 @@ np.random.seed(seed)
 torch.cuda.manual_seed_all(seed)
 
 import time
+from datetime import datetime
+
+from tqdm import tqdm
+
+from retro_pytorch.data import DataLoader_from_file, Dataset_jsonl
 from retro_pytorch.retro_pytorch import RETRO
 from retro_pytorch.training import TrainingWrapper
-from retro_pytorch.data import Dataset_jsonl, DataLoader_from_file
-from datetime import datetime
-from tqdm import tqdm
 
 # %%
 
@@ -87,9 +90,7 @@ wrapper_db = TrainingWrapper(
 batch_size = 14
 batch_accumulation = 64
 accumulate_steps = accumulate_steps = (
-    batch_accumulation // batch_size
-    if batch_accumulation % batch_size == 0
-    else batch_accumulation // batch_size + 1
+    batch_accumulation // batch_size if batch_accumulation % batch_size == 0 else batch_accumulation // batch_size + 1
 )
 batch_accumulation = accumulate_steps * batch_size
 total_items = 1367016
@@ -104,9 +105,7 @@ val_ds = Dataset_jsonl(val_data_path, cnunk_size=64, seq_length=512, pad_id=0)
 train_dl = DataLoader_from_file(train_ds, batch_size=batch_size)
 val_dl = DataLoader_from_file(val_ds, batch_size=batch_size)
 
-optim, scheduler = wrapper_db.get_optimizer(
-    warmup_steps=warmup_steps, training_steps=total_steps, lr=lr, wd=0.01
-)
+optim, scheduler = wrapper_db.get_optimizer(warmup_steps=warmup_steps, training_steps=total_steps, lr=lr, wd=0.01)
 scheduler.step()
 fetch_neighbours = wrapper_db.fetch_neighbours
 
@@ -186,9 +185,7 @@ for seq, docs in tqdm(train_dl, total=total_steps):
 
         if val_step < num_val:
             print("----- Reloading val dataset ------")
-            val_ds = Dataset_jsonl(
-                val_data_path, cnunk_size=64, seq_length=512, pad_id=0
-            )
+            val_ds = Dataset_jsonl(val_data_path, cnunk_size=64, seq_length=512, pad_id=0)
             val_dl = DataLoader_from_file(val_ds, batch_size=batch_size)
             val_dl_iter = iter(val_dl)
 

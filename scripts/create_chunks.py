@@ -1,9 +1,11 @@
-import torch
+import gc
 import sys
+import time
+
+import torch
+
 from retro_pytorch.retro_pytorch import RETRO
 from retro_pytorch.training import TrainingWrapper
-import gc
-import time
 
 """
 Create your chunks and chunk start indices (for calculating sequence ranges for autoregressive training) using text_folder_to_chunks_

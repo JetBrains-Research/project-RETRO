@@ -33,16 +33,12 @@ def cast_tuple(val, num=1):
 # deepnet init
 
 
-def deepnorm_init(
-    transformer, beta, module_name_match_list=[".ff.", ".to_v", ".to_out"]
-):
+def deepnorm_init(transformer, beta, module_name_match_list=[".ff.", ".to_v", ".to_out"]):
     for name, module in transformer.named_modules():
         if type(module) != nn.Linear:
             continue
 
-        needs_beta_gain = any(
-            map(lambda substr: substr in name, module_name_match_list)
-        )
+        needs_beta_gain = any(map(lambda substr: substr in name, module_name_match_list))
         gain = beta if needs_beta_gain else 1
         nn.init.xavier_normal_(module.weight.data, gain=gain)
 
@@ -228,9 +224,7 @@ class Attention(nn.Module):
 
         if self.causal:
             i, j = sim.shape[-2:]
-            causal_mask = torch.ones(i, j, device=device, dtype=torch.bool).triu(
-                j - i + 1
-            )
+            causal_mask = torch.ones(i, j, device=device, dtype=torch.bool).triu(j - i + 1)
             sim = sim.masked_fill(causal_mask, mask_value)
 
         # attention
@@ -262,7 +256,7 @@ class ChunkedCrossAttention(nn.Module):
         # derive variables
         chunk_size = self.chunk_size
 
-        b, n, num_chunks, num_retrieved = x.shape[0], x.shape[-2], *context.shape[-4:-2]  # type: ignore
+        b, n, num_chunks, num_retrieved = x.shape[0], x.shape[-2], *context.shape[-4:-2]
 
         # if sequence length less than chunk size, do an early return
 
@@ -310,9 +304,7 @@ class ChunkedCrossAttention(nn.Module):
 
         # pad back to original, with 0s at the beginning (which will be added to the residual and be fine)
 
-        out = F.pad(
-            out, (0, 0, causal_padding, -causal_padding + seq_remain_len), value=0.0
-        )
+        out = F.pad(out, (0, 0, causal_padding, -causal_padding + seq_remain_len), value=0.0)
         return out
 
 
@@ -351,16 +343,11 @@ class Encoder(nn.Module):
         wrapper = (
             partial(PreNorm, dim, norm_klass=norm_klass)
             if not post_norm
-            else partial(
-                PostNorm, dim, scale_residual=scale_residual, norm_klass=norm_klass
-            )
-        )
+            else partial(PostNorm, dim, scale_residual=scale_residual, norm_klass=norm_klass)
         )
 
         for layer_num in range(1, depth + 1):
-            has_cross_attn = (
-                not exists(cross_attn_layers) or layer_num in cross_attn_layers
-            )
+            has_cross_attn = not exists(cross_attn_layers) or layer_num in cross_attn_layers
 
             self.layers.append(
                 nn.ModuleList(
@@ -390,12 +377,8 @@ class Encoder(nn.Module):
                 )
             )
 
-        self.norm_out = (
-            norm_klass(dim) if final_norm and not post_norm else nn.Identity()
-        )
-        self.project_out = (
-            nn.Linear(dim, output_dim) if exists(output_dim) else nn.Identity()
-        )
+        self.norm_out = norm_klass(dim) if final_norm and not post_norm else nn.Identity()
+        self.project_out = nn.Linear(dim, output_dim) if exists(output_dim) else nn.Identity()
 
     def forward(self, x, *, mask=None, chunked_seq):
         device, chunk_size, seq_len = x.device, x.shape[-2], chunked_seq.shape[-2]
@@ -445,18 +428,13 @@ class Decoder(nn.Module):
         wrapper = (
             partial(PreNorm, dim, norm_klass=norm_klass)
             if not post_norm
-            else partial(
-                PostNorm, dim, scale_residual=scale_residual, norm_klass=norm_klass
-            )
-        )
+            else partial(PostNorm, dim, scale_residual=scale_residual, norm_klass=norm_klass)
         )
 
         self.chunk_size = chunk_size
 
         for layer_num in range(1, depth + 1):
-            has_cross_attn = (
-                not exists(cross_attn_layers) or layer_num in cross_attn_layers
-            )
+            has_cross_attn = not exists(cross_attn_layers) or layer_num in cross_attn_layers
 
             self.layers.append(
                 nn.ModuleList(
@@ -486,9 +464,7 @@ class Decoder(nn.Module):
                 )
             )
 
-        self.norm_out = (
-            norm_klass(dim) if final_norm and not post_norm else nn.Identity()
-        )
+        self.norm_out = norm_klass(dim) if final_norm and not post_norm else nn.Identity()
 
     def forward(
         self,
@@ -594,9 +570,7 @@ class RETRO(nn.Module):
         use_deepnet=False,
     ):
         super().__init__()
-        assert (
-            dim_head >= MIN_DIM_HEAD
-        ), f"dimension per head must be greater than {MIN_DIM_HEAD}"
+        assert dim_head >= MIN_DIM_HEAD, f"dimension per head must be greater than {MIN_DIM_HEAD}"
         self.seq_len = max_seq_len
         self.pad_id = pad_id
 
@@ -605,9 +579,7 @@ class RETRO(nn.Module):
 
         self.chunk_size = chunk_size
 
-        self.to_decoder_model_dim = (
-            nn.Linear(enc_dim, dec_dim) if enc_dim != dec_dim else nn.Identity()
-        )
+        self.to_decoder_model_dim = nn.Linear(enc_dim, dec_dim) if enc_dim != dec_dim else nn.Identity()
 
         # for deepnet, residual scales
         # follow equation in Figure 2. in https://arxiv.org/abs/2203.00555
@@ -615,9 +587,7 @@ class RETRO(nn.Module):
         norm_klass = default(norm_klass, RMSNorm)
 
         if use_deepnet:
-            enc_scale_residual = default(
-                enc_scale_residual, 0.81 * ((enc_depth**4) * dec_depth) ** 0.0625
-            )
+            enc_scale_residual = default(enc_scale_residual, 0.81 * ((enc_depth**4) * dec_depth) ** 0.0625)
             dec_scale_residual = default(dec_scale_residual, (3 * dec_depth) ** 0.25)
             norm_klass = nn.LayerNorm
 
@@ -658,9 +628,7 @@ class RETRO(nn.Module):
         # deepnet has special init of weight matrices
 
         if use_deepnet:
-            deepnorm_init(
-                self.encoder, 0.87 * ((enc_depth**4) * dec_depth) ** -0.0625
-            )
+            deepnorm_init(self.encoder, 0.87 * ((enc_depth**4) * dec_depth) ** -0.0625)
             deepnorm_init(self.decoder, (12 * dec_depth) ** -0.25)
 
     def forward_without_retrieval(self, seq, return_loss=False):
@@ -687,9 +655,7 @@ class RETRO(nn.Module):
 
         # cross entropy loss
 
-        loss = F.cross_entropy(
-            rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id
-        )
+        loss = F.cross_entropy(rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id)
         return loss
 
     def forward(self, seq, retrieved=None, return_loss=False):
@@ -704,7 +670,7 @@ class RETRO(nn.Module):
         if not exists(retrieved):
             return self.forward_without_retrieval(seq, return_loss=return_loss)
 
-        # assert not (return_loss and not self.training), "must be training if returning loss"
+        # assert not (return_loss and not self.training), 'must be training if returning loss'
 
         # assume padding token id (usually 0.) is to be masked out
 
@@ -725,7 +691,7 @@ class RETRO(nn.Module):
         n, num_chunks, num_neighbors, chunk_size, retrieved_shape, device = (
             seq.shape[-1],
             *retrieved.shape[-3:],
-           # type: ignore retrieved.shape,
+            retrieved.shape,
             seq.device,
         )
 
@@ -758,9 +724,7 @@ class RETRO(nn.Module):
         encoder_retrieved_mask = decoder_retrieved_mask = None
 
         if exists(mask):
-            assert (
-                mask.shape == retrieved_shape
-            ), "retrieval mask must be of the same shape as the retrieval tokens"
+            assert mask.shape == retrieved_shape, "retrieval mask must be of the same shape as the retrieval tokens"
             encoder_retrieved_mask = rearrange(mask, "b k r n -> (b k r) n")
             decoder_retrieved_mask = mask
 
@@ -787,7 +751,5 @@ class RETRO(nn.Module):
 
         # cross entropy loss
 
-        loss = F.cross_entropy(
-            rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id
-        )
+        loss = F.cross_entropy(rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id)
         return loss

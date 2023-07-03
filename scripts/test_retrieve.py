@@ -1,13 +1,15 @@
-import torch
-import time
 import sys
-from retro_pytorch.retro_pytorch import RETRO
-from retro_pytorch.training import TrainingWrapper
-import matplotlib.pyplot as plt
+import time
 from datetime import datetime
+
+import matplotlib.pyplot as plt
+import torch
 from tqdm import tqdm
 from transformers import AutoTokenizer, T5ForConditionalGeneration
-from retro_pytorch.data import Dataset_jsonl, DataLoader_from_file
+
+from retro_pytorch.data import DataLoader_from_file, Dataset_jsonl
+from retro_pytorch.retro_pytorch import RETRO
+from retro_pytorch.training import TrainingWrapper
 
 # %%
 
@@ -122,11 +124,7 @@ print("----Original-----")
 seq_orig, retrieved_orig = next(orig_dl)
 seq_orig, retrieved_orig = seq_orig[0], retrieved_orig[0]
 chunks_orig = torch.chunk(seq_orig[0:-1], chunks=8, dim=0)
-print(
-    torch.cat(
-        [seq_distance(chunks_orig[i], retrieved_orig[i, 0, :64]) for i in range(8)]
-    )
-)
+print(torch.cat([seq_distance(chunks_orig[i], retrieved_orig[i, 0, :64]) for i in range(8)]))
 
 # %%
 
@@ -142,9 +140,7 @@ for i in range(400):
     seq_orig, retrieved_orig = next(orig_dl)
     seq_orig, retrieved_orig = seq_orig[0], retrieved_orig[0]
     chunks_orig = torch.chunk(seq_orig[0:-1], chunks=8, dim=0)
-    dist_orig = torch.cat(
-        [seq_distance(chunks_orig[i], retrieved_orig[i, 0, :64]) for i in range(8)]
-    )
+    dist_orig = torch.cat([seq_distance(chunks_orig[i], retrieved_orig[i, 0, :64]) for i in range(8)])
 
     diff = (dist - dist_orig)[dist > 1e-4]
     diffs = torch.cat((diffs, diff.cpu()))
