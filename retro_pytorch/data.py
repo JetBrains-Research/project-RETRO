@@ -1,4 +1,5 @@
 from functools import partial
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -8,14 +9,15 @@ from retro_pytorch.utils import memmap
 
 # knn to retrieved chunks
 
+
 def knn_to_retrieved_chunks(
     knns,
     chunks_memmap,
     *,
     add_continuations,
     num_chunks,
-    pad_id = 0,
-    eos_id = EOS_ID,
+    pad_id=0,
+    eos_id=EOS_ID,
 ):
 
     # derive mask for no neighbors found (-1)
@@ -26,7 +28,7 @@ def knn_to_retrieved_chunks(
     # get neighbor and continuation chunks
 
     knn_chunks = chunks_memmap[knns]
-    is_last_document_chunk = np.any(knn_chunks == eos_id, axis = -1, keepdims = True)
+    is_last_document_chunk = np.any(knn_chunks == eos_id, axis=-1, keepdims=True)
 
     # use presence of [EOS] in chunk as way to detect document boundaries
     # [EOS] in BERT tokenizer is 102
@@ -34,20 +36,22 @@ def knn_to_retrieved_chunks(
     retrieved = knn_chunks[..., :-1]
 
     if add_continuations:
-        continuation_indices = np.clip(knns + 1, 0, num_chunks - 1) # chunks are stored contiguously
+        continuation_indices = np.clip(knns + 1, 0, num_chunks - 1)  # chunks are stored contiguously
         continuation_chunks = chunks_memmap[continuation_indices][..., :-1]
         continuation_chunks *= ~is_last_document_chunk
 
         # combine neighbors with continuations
 
-        retrieved = np.concatenate((retrieved, continuation_chunks), axis = -1)
+        retrieved = np.concatenate((retrieved, continuation_chunks), axis=-1)
 
     # mask out any nearest neighbor chunks that was -1 (not found at index time) to padding id
 
     retrieved = np.where(~no_neighbor_mask[..., None], retrieved, pad_id)
     return retrieved
 
+
 # dataset
+
 
 class RETRODataset(Dataset):
     def __init__(
@@ -61,9 +65,9 @@ class RETRODataset(Dataset):
         chunk_memmap_path,
         chunk_nn_memmap_path,
         seq_memmap_path,
-        eos_id = EOS_ID,
-        pad_id = 0.,
-        add_continuations = True
+        eos_id=EOS_ID,
+        pad_id=0.0,
+        add_continuations=True,
     ):
         super().__init__()
         self.num_chunks = num_chunks
@@ -78,9 +82,9 @@ class RETRODataset(Dataset):
         knn_shape = (num_chunks_with_padding, num_neighbors)
 
         self.add_continuations = add_continuations
-        self.get_chunks = partial(memmap, chunk_memmap_path, dtype = np.int32, shape = chunks_shape)
-        self.get_knns = partial(memmap, chunk_nn_memmap_path, dtype = np.int32, shape = knn_shape)
-        self.get_seqs = partial(memmap, seq_memmap_path, dtype = np.int32, shape = (num_sequences,))
+        self.get_chunks = partial(memmap, chunk_memmap_path, dtype=np.int32, shape=chunks_shape)
+        self.get_knns = partial(memmap, chunk_nn_memmap_path, dtype=np.int32, shape=knn_shape)
+        self.get_seqs = partial(memmap, seq_memmap_path, dtype=np.int32, shape=(num_sequences,))
 
     def __len__(self):
         return self.num_sequences
@@ -98,9 +102,9 @@ class RETRODataset(Dataset):
 
             # mask out (with padding tokens) any token following an <eos> | disallow having more than 1 document in a sequence, as it would break RETRO's CCA
 
-            seq_mask = np.cumsum(seq_tokens == self.eos_id, axis = 0)
-            seq_mask = np.pad(seq_mask, (1, 0))[:-1] == 0.
-            seq_tokens = np.where(seq_mask, seq_tokens, 0.)
+            seq_mask = np.cumsum(seq_tokens == self.eos_id, axis=0)
+            seq_mask = np.pad(seq_mask, (1, 0))[:-1] == 0.0
+            seq_tokens = np.where(seq_mask, seq_tokens, 0.0)
 
             # derive retrieved tokens
 
@@ -109,9 +113,9 @@ class RETRODataset(Dataset):
             retrieved = knn_to_retrieved_chunks(
                 knns,
                 chunks_memmap,
-                add_continuations = self.add_continuations,
-                eos_id = self.eos_id,
-                num_chunks = self.num_chunks
+                add_continuations=self.add_continuations,
+                eos_id=self.eos_id,
+                num_chunks=self.num_chunks,
             )
 
         seq_tokens_torch = torch.from_numpy(seq_tokens).long()
