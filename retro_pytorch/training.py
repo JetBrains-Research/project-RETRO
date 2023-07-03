@@ -12,9 +12,7 @@ from torch.utils.data import DataLoader
 from retro_pytorch import RETRO, RETRODataset
 from retro_pytorch.data import knn_to_retrieved_chunks
 from retro_pytorch.optimizer import get_optimizer
-from retro_pytorch.retrieval import (EOS_ID, SOS_ID, bert_embed,
-                                     chunks_to_precalculated_knn_,
-                                     text_folder_to_chunks_)
+from retro_pytorch.retrieval import EOS_ID, SOS_ID, bert_embed, chunks_to_precalculated_knn_, text_folder_to_chunks_
 from retro_pytorch.utils import is_true_env_flag, memmap
 
 # helpers
