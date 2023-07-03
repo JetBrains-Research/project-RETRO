@@ -1,0 +1,50 @@
+[tool.poetry]
+name = "retro-pytorch"
+version = "0.1.0"
+description = "Project-specific modification of RETRO, based on PyTorch implementation of RETRO"
+authors = [
+    "Phil Wang <lucidrains@gmail.com>", # Author of the original repository
+    "Egor Bogomolov <egor.bogomolov@jetbrains.com>", 
+    "Timur Galimzyanov <timur.galimzyanov@jetbrains.com>"
+]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/JetBrains-Research/RETRO-pytorch"
+keywords = ["artificial intelligence", "deep learning", "transformers", "attention-mechanism", "retrieval"]
+packages = []
+
+[tool.poetry.dependencies] # general dependencies
+python = "~3.10"
+einops = "^0.6.1"
+numpy = "^1.25.0"
+sentencepiece = "^0.1.99"
+tqdm = "^4.65.0"
+torch = "^1.13"
+autofaiss = "^2.15.8"
+
+[tool.poetry.group.dev.dependencies]  # development process dependencies
+black = "^22.3"
+isort = "^5.12.0"
+mypy = "^1.0.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.isort]
+line_length = 120
+py_version = 310
+
+[tool.mypy]
+python_version = "3.10"
+
+[[tool.mypy.overrides]]
+module = [
+  "autofaiss.*",
+  "faiss.*"
+]
+ignore_missing_imports = true

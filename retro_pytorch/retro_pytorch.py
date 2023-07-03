@@ -2,10 +2,10 @@ from functools import partial
 
 import torch
 import torch.nn.functional as F
-from torch import nn, einsum
+from einops import rearrange, repeat
+from torch import einsum, nn
 
 from retro_pytorch.retrieval import BERT_VOCAB_SIZE
-from einops import rearrange, repeat
 
 # constants
 
@@ -262,7 +262,7 @@ class ChunkedCrossAttention(nn.Module):
         # derive variables
         chunk_size = self.chunk_size
 
-        b, n, num_chunks, num_retrieved = x.shape[0], x.shape[-2], *context.shape[-4:-2]
+        b, n, num_chunks, num_retrieved = x.shape[0], x.shape[-2], *context.shape[-4:-2]  # type: ignore
 
         # if sequence length less than chunk size, do an early return
 
@@ -354,6 +354,7 @@ class Encoder(nn.Module):
             else partial(
                 PostNorm, dim, scale_residual=scale_residual, norm_klass=norm_klass
             )
+        )
         )
 
         for layer_num in range(1, depth + 1):
@@ -447,6 +448,7 @@ class Decoder(nn.Module):
             else partial(
                 PostNorm, dim, scale_residual=scale_residual, norm_klass=norm_klass
             )
+        )
         )
 
         self.chunk_size = chunk_size
@@ -702,7 +704,7 @@ class RETRO(nn.Module):
         if not exists(retrieved):
             return self.forward_without_retrieval(seq, return_loss=return_loss)
 
-        # assert not (return_loss and not self.training), 'must be training if returning loss'
+        # assert not (return_loss and not self.training), "must be training if returning loss"
 
         # assume padding token id (usually 0.) is to be masked out
 
@@ -723,7 +725,7 @@ class RETRO(nn.Module):
         n, num_chunks, num_neighbors, chunk_size, retrieved_shape, device = (
             seq.shape[-1],
             *retrieved.shape[-3:],
-            retrieved.shape,
+           # type: ignore retrieved.shape,
             seq.device,
         )
 

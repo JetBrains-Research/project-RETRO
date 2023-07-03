@@ -106,21 +106,17 @@ class RETRODataset(Dataset):
             )
             # print(chunk_range)
             chunks = chunks_memmap[chunk_range]
-            # print(chunks.size)
 
             # excise the last token, except for last token of last chunk
 
             seq_tokens = np.concatenate((chunks[:, :-1].flatten(), chunks[-1, -1:]))
-            # print(seq_tokens.size)
 
             # mask out (with padding tokens) any token following an <eos> | disallow having more than 1 document in a sequence, as it would break RETRO's CCA
 
             seq_mask = np.cumsum(seq_tokens == self.eos_id, axis=0)
-            # print(seq_mask)
             seq_mask = np.pad(seq_mask, (1, 0))[:-1] == 0.0
-            # print(seq_mask)
             seq_tokens = np.where(seq_mask, seq_tokens, 0.0)
-            # print(seq_tokens)
+
             # derive retrieved tokens
             knns = knns_memmap[chunk_range]
 
