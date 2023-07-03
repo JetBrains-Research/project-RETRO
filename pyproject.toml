@@ -26,6 +26,7 @@ autofaiss = "^2.15.8"
 black = "^22.3"
 isort = "^5.12.0"
 mypy = "^1.0.1"
+types-tqdm = "^4.65.0.1"
 
 [build-system]
 requires = ["poetry-core"]
@@ -46,6 +47,9 @@ python_version = "3.10"
 [[tool.mypy.overrides]]
 module = [
   "autofaiss.*",
-  "faiss.*"
+  "faiss.*",
+  "transformers.*",
+  "jsonlines.*",
+  "matplotlib.*",
 ]
 ignore_missing_imports = true
