@@ -1,14 +1,13 @@
-from pathlib import Path
-from math import ceil
-
-import torch
-import torch.nn.functional as F
 import logging
-import numpy as np
-from einops import rearrange
+from math import ceil
+from pathlib import Path
 
 import faiss
+import numpy as np
+import torch
+import torch.nn.functional as F
 from autofaiss import build_index
+from einops import rearrange
 
 from retro_pytorch.utils import memmap, reset_folder_
 

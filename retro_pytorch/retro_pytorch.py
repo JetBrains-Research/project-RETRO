@@ -2,10 +2,10 @@ from functools import partial
 
 import torch
 import torch.nn.functional as F
-from torch import nn, einsum
+from einops import rearrange, repeat
+from torch import einsum, nn
 
 from retro_pytorch.retrieval import BERT_VOCAB_SIZE
-from einops import rearrange, repeat
 
 # constants
 

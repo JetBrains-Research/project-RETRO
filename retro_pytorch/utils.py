@@ -1,9 +1,9 @@
 import os
-import numpy as np
-
+from contextlib import contextmanager
 from pathlib import Path
 from shutil import rmtree
-from contextlib import contextmanager
+
+import numpy as np
 
 
 def is_true_env_flag(env_flag):
