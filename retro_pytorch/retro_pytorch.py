@@ -241,7 +241,7 @@ class ChunkedCrossAttention(nn.Module):
         # derive variables
         chunk_size = self.chunk_size
 
-        b, n, num_chunks, num_retrieved = x.shape[0], x.shape[-2], *context.shape[-4:-2]
+        b, n, num_chunks, num_retrieved = x.shape[0], x.shape[-2], *context.shape[-4:-2] # type: ignore
 
         # if sequence length less than chunk size, do an early return
 
@@ -618,7 +618,7 @@ class RETRO(nn.Module):
 
         n, num_chunks, num_neighbors, chunk_size, retrieved_shape, device = (
             seq.shape[-1],
-            *retrieved.shape[-3:],
+            *retrieved.shape[-3:], # type: ignore
             retrieved.shape,
             seq.device,
         )

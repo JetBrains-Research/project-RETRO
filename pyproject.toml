@@ -34,3 +34,13 @@ build-backend = "poetry.core.masonry.api"
 [tool.black]
 line-length = 120
 target-version = ["py310"]
+
+[tool.mypy]
+python_version = "3.10"
+
+[[tool.mypy.overrides]]
+module = [
+  "autofaiss.*",
+  "faiss.*"
+]
+ignore_missing_imports = true
