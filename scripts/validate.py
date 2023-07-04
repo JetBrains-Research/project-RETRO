@@ -37,8 +37,8 @@ retro = RETRO(
 #%%
 
 # # loading pathes
-conf_load = OmegaConf.load('config.yaml')
-paths = conf_load['paths']
+conf_load = OmegaConf.load("config.yaml")
+paths = conf_load["paths"]
 
 val_data_path = paths.data_folder + paths.val_data_file
 

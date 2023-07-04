@@ -31,8 +31,8 @@ It would add '_no_retrieve' to output filenames (model and train/val loss tracki
 """
 
 # # loading pathes
-conf_load = OmegaConf.load('config.yaml')
-paths = conf_load['paths']
+conf_load = OmegaConf.load("config.yaml")
+paths = conf_load["paths"]
 
 model_name = paths.model_name + add_flag
 tain_data_path = paths.data_folder + paths.tain_data_file
@@ -140,7 +140,15 @@ for train_steps, (seq, docs) in enumerate(tqdm(train_dl, total=total_steps), sta
         f_train.flush()
         losses_val_cur, val_step = val_steps(retro, no_retrieve, fetch_neighbours, num_val, val_dl_iter)
         max_val_loss, saved_ind, val_dl_iter = val_upadate(
-            retro, losses_val, losses_val_cur, paths.model_folder, model_name, val_dl_iter, f_val, max_val_loss, saved_ind
+            retro,
+            losses_val,
+            losses_val_cur,
+            paths.model_folder,
+            model_name,
+            val_dl_iter,
+            f_val,
+            max_val_loss,
+            saved_ind,
         )
 
         if val_step < num_val:
