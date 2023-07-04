@@ -6,6 +6,7 @@ seed_all(1111)
 
 import argparse
 import gc
+from omegaconf import OmegaConf
 import time
 
 from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
@@ -35,13 +36,11 @@ retro = RETRO(
 
 #%%
 
-texts_folder = "../../data/texts_folder/"
-data_folder = "../../data/full_dataset/"
-model_folder = "../../data/models/"
-out_folder = "../out_dir/"
+# # loading pathes
+conf_load = OmegaConf.load('config.yaml')
+paths = conf_load['paths']
 
-tain_data_path = data_folder + "train.jsonl"
-val_data_path = data_folder + "val.jsonl"
+val_data_path = paths.data_folder + paths.val_data_file
 
 gc.collect()
 torch.cuda.empty_cache()
@@ -50,13 +49,13 @@ wrapper_db = TrainingWrapper(
     retro=retro,  # path to retro instance
     knn=2,  # knn (2 in paper was sufficient)
     chunk_size=64,  # chunk size (64 in paper)
-    documents_path=data_folder,  # path to folder of text
+    documents_path=paths.data_folder,  # path to folder of text
     data_file_paths=[],
-    chunks_memmap_path=texts_folder + "train.chunks.dat",  # path to chunks
-    seqs_memmap_path=texts_folder + "train.seq.dat",  # path to sequence data
-    doc_ids_memmap_path=texts_folder
+    chunks_memmap_path=paths.texts_folder + "train.chunks.dat",  # path to chunks
+    seqs_memmap_path=paths.texts_folder + "train.seq.dat",  # path to sequence data
+    doc_ids_memmap_path=paths.texts_folder
     + "train.doc_ids.dat",  # path to document ids per chunk (used for filtering neighbors belonging to same document)
-    processed_stats_json_path=texts_folder + "processed-stats.json",
+    processed_stats_json_path=paths.texts_folder + "processed-stats.json",
     # max_chunks = n_chuncks,                        # maximum cap to chunks
     # max_seqs = n_chuncks//5,                            # maximum seqs
     knn_extra_neighbors=100,  # num extra neighbors to fetch
@@ -79,7 +78,7 @@ fetch_neighbours = wrapper_db.fetch_neighbours
 losses_val = []
 
 # model_file = model_folder + 'retro_no_retrieve_last.pth'
-model_file = model_folder + "retro_last.pth"
+model_file = paths.model_folder + "retro_last.pth"
 retro.load_state_dict(torch.load(model_file))
 retro.eval()
 

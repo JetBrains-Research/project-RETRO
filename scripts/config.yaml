@@ -1,0 +1,10 @@
+paths:
+  texts_folder: ../../data/texts_folder/
+  data_folder: ../../data/full_dataset/
+  model_folder: ../../data/models/
+  out_folder: ../out_dir/
+  model_name: retro
+  tain_data_file: train.jsonl
+  val_data_file: val.jsonl
+  out_filename_train: losses_train_dev
+  out_filename_val: losses_val_dev

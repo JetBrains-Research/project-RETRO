@@ -4,7 +4,7 @@ seed_all(1111)
 import argparse
 import time
 from datetime import datetime
-
+from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
@@ -30,24 +30,19 @@ Training. Add flag --no-retrieve or -no if you want to train without retrieval.
 It would add '_no_retrieve' to output filenames (model and train/val loss tracking)
 """
 
-# declaring pathes # TODO maybe move them into config file
-texts_folder = "../../data/texts_folder/"
-data_folder = "../../data/full_dataset/"
-model_folder = "../../data/models/"
-out_folder = "../out_dir/"
-model_name = "retro" + add_flag
+# # loading pathes
+conf_load = OmegaConf.load('config.yaml')
+paths = conf_load['paths']
 
-tain_data_path = data_folder + "train.jsonl"
-val_data_path = data_folder + "val.jsonl"
-
-### output files
-filename_train = "losses_train_dev"
-filename_val = "losses_val_dev"
-filename_train = out_folder + filename_train + add_flag + ".txt"
-filename_val = out_folder + filename_val + add_flag + ".txt"
+model_name = paths.model_name + add_flag
+tain_data_path = paths.data_folder + paths.tain_data_file
+val_data_path = paths.data_folder + paths.val_data_file
+filename_train = paths.out_folder + paths.out_filename_train + add_flag + ".txt"
+filename_val = paths.out_folder + paths.out_filename_val + add_flag + ".txt"
 f_train = open(filename_train, "a")
 f_val = open(filename_val, "a")
 
+## TODO I am not sure that at this step I want to move model hyperparameters to a config file - it is easier for me to read it here.
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
 retro = RETRO(
     max_seq_len=512,  # max sequence length
@@ -71,13 +66,13 @@ wrapper_db = TrainingWrapper(
     retro=retro,  # path to retro instance
     knn=2,  # knn (2 in paper was sufficient)
     chunk_size=64,  # chunk size (64 in paper)
-    documents_path=data_folder,  # path to folder of text
+    documents_path=paths.data_folder,  # path to folder of text
     data_file_paths=[],
-    chunks_memmap_path=texts_folder + "train.chunks.dat",  # path to chunks
-    seqs_memmap_path=texts_folder + "train.seq.dat",  # path to sequence data
-    doc_ids_memmap_path=texts_folder
+    chunks_memmap_path=paths.texts_folder + "train.chunks.dat",  # path to chunks
+    seqs_memmap_path=paths.texts_folder + "train.seq.dat",  # path to sequence data
+    doc_ids_memmap_path=paths.texts_folder
     + "train.doc_ids.dat",  # path to document ids per chunk (used for filtering neighbors belonging to same document)
-    processed_stats_json_path=texts_folder + "processed-stats.json",
+    processed_stats_json_path=paths.texts_folder + "processed-stats.json",
     # max_chunks = n_chuncks,                        # maximum cap to chunks
     # max_seqs = n_chuncks//5,                            # maximum seqs
     knn_extra_neighbors=100,  # num extra neighbors to fetch
@@ -145,7 +140,7 @@ for train_steps, (seq, docs) in enumerate(tqdm(train_dl, total=total_steps), sta
         f_train.flush()
         losses_val_cur, val_step = val_steps(retro, no_retrieve, fetch_neighbours, num_val, val_dl_iter)
         max_val_loss, saved_ind, val_dl_iter = val_upadate(
-            retro, losses_val, losses_val_cur, model_folder, model_name, val_dl_iter, f_val, max_val_loss, saved_ind
+            retro, losses_val, losses_val_cur, paths.model_folder, model_name, val_dl_iter, f_val, max_val_loss, saved_ind
         )
 
         if val_step < num_val:
