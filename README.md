@@ -1,3 +1,12 @@
+## Description
+
+This is a fork of the implementation of RETRO-Pytorch model made by lucidrains.
+Changes I added include:
+
+1. Changed the source of the data from a folder with *.txt files to a single jsonl file.
+2. The retrieval now occurs during training and validation from a single database. Before single dataloader contained both items and retrieved examples, which made it impossible train-test splitting. Now each doc contains a unique doc_id that is used to exclude self-retrival.
+3. Minor changes in progress output.
+
 <img src="./RETRO.png" width="500px"></img>
 
 ## RETRO - Pytorch

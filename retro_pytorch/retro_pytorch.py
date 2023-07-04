@@ -130,7 +130,12 @@ class FeedForward(nn.Module):
         super().__init__()
         inner_dim = int(mult * dim)
 
-        self.ff = nn.Sequential(nn.Linear(dim, inner_dim), nn.GELU(), nn.Dropout(dropout), nn.Linear(inner_dim, dim))
+        self.ff = nn.Sequential(
+            nn.Linear(dim, inner_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(inner_dim, dim),
+        )
 
     def forward(self, x):
         return self.ff(x)
@@ -140,7 +145,17 @@ class FeedForward(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, dim, *, context_dim=None, dim_head=64, heads=8, causal=False, dropout=0.0, null_kv=False):
+    def __init__(
+        self,
+        dim,
+        *,
+        context_dim=None,
+        dim_head=64,
+        heads=8,
+        causal=False,
+        dropout=0.0,
+        null_kv=False,
+    ):
         super().__init__()
         context_dim = default(context_dim, dim)
 
@@ -271,6 +286,7 @@ class ChunkedCrossAttention(nn.Module):
         pos_emb = (q_pos_emb, k_pos_emb)
 
         # reshape so we have chunk to chunk attention, without breaking causality
+        # n = chunk_size, r = num_neighbors, k = num_chunks
 
         x = rearrange(x, "b (k n) d -> (b k) n d", k=num_chunks)
         context = rearrange(context, "b k r n d -> (b k) (r n) d")
@@ -337,11 +353,21 @@ class Encoder(nn.Module):
                 nn.ModuleList(
                     [
                         wrapper(
-                            Attention(dim=dim, dim_head=dim_head, heads=heads, dropout=attn_dropout, causal=causal)
+                            Attention(
+                                dim=dim,
+                                dim_head=dim_head,
+                                heads=heads,
+                                dropout=attn_dropout,
+                                causal=causal,
+                            )
                         ),
                         wrapper(
                             Attention(
-                                dim=dim, context_dim=context_dim, dim_head=dim_head, heads=heads, dropout=attn_dropout
+                                dim=dim,
+                                context_dim=context_dim,
+                                dim_head=dim_head,
+                                heads=heads,
+                                dropout=attn_dropout,
                             )
                         )
                         if has_cross_attn
@@ -413,10 +439,22 @@ class Decoder(nn.Module):
             self.layers.append(
                 nn.ModuleList(
                     [
-                        wrapper(Attention(dim=dim, dim_head=dim_head, heads=heads, dropout=attn_dropout, causal=True)),
+                        wrapper(
+                            Attention(
+                                dim=dim,
+                                dim_head=dim_head,
+                                heads=heads,
+                                dropout=attn_dropout,
+                                causal=True,
+                            )
+                        ),
                         wrapper(
                             ChunkedCrossAttention(
-                                chunk_size=chunk_size, dim=dim, dim_head=dim_head, heads=heads, dropout=attn_dropout
+                                chunk_size=chunk_size,
+                                dim=dim,
+                                dim_head=dim_head,
+                                heads=heads,
+                                dropout=attn_dropout,
                             )
                         )
                         if has_cross_attn
@@ -428,7 +466,15 @@ class Decoder(nn.Module):
 
         self.norm_out = norm_klass(dim) if final_norm and not post_norm else nn.Identity()
 
-    def forward(self, x, *, encoder=None, encoder_retrieved_mask=None, context_mask=None, retrieved=None):
+    def forward(
+        self,
+        x,
+        *,
+        encoder=None,
+        encoder_retrieved_mask=None,
+        context_mask=None,
+        retrieved=None,
+    ):
         device, seq_len = x.device, x.shape[-2]
         self_attn_pos_emb = self.rotary_pos_emb(seq_len, device=device)
 
@@ -460,16 +506,34 @@ class Decoder(nn.Module):
 
             if exists(cross_attn) and exists(retrieved):
                 if not retrieved_encoded:
+                    ### rearrangement is needed just to flatten the retrieved chunks to pass them through encoder
                     retrieved = rearrange(retrieved, "b k r n d -> (b k r) n d")
                     seq_as_context = repeat(
-                        x[:, :seq_index], "b (k n) d -> (b k r) n d", n=self.chunk_size, r=num_neighbors
+                        x[:, :seq_index],
+                        "b (k n) d -> (b k r) n d",
+                        n=self.chunk_size,
+                        r=num_neighbors,
                     )
 
-                    retrieved = encoder(retrieved, mask=encoder_retrieved_mask, chunked_seq=seq_as_context)
-                    retrieved = rearrange(retrieved, "(b k r) n d -> b k r n d", k=num_chunks, r=num_neighbors)
+                    retrieved = encoder(
+                        retrieved,
+                        mask=encoder_retrieved_mask,
+                        chunked_seq=seq_as_context,
+                    )
+                    retrieved = rearrange(
+                        retrieved,
+                        "(b k r) n d -> b k r n d",
+                        k=num_chunks,
+                        r=num_neighbors,
+                    )
                     retrieved_encoded = True
 
-                x = cross_attn(x, context=retrieved, context_mask=context_mask, pos_emb=cross_attn_pos_emb)
+                x = cross_attn(
+                    x,
+                    context=retrieved,
+                    context_mask=context_mask,
+                    pos_emb=cross_attn_pos_emb,
+                )
 
             x = ff(x)
 
@@ -567,9 +631,10 @@ class RETRO(nn.Module):
             deepnorm_init(self.encoder, 0.87 * ((enc_depth**4) * dec_depth) ** -0.0625)
             deepnorm_init(self.decoder, (12 * dec_depth) ** -0.25)
 
-    def forward_without_retrieval(self, seq):
-        # embed sequence
-
+    def forward_without_retrieval(self, seq, return_loss=False):
+        if return_loss:
+            seq, labels = seq[:, :-1], seq[:, 1:]
+        # embed sequence and cut it
         embed = self.token_emb(seq)
         embed = embed[:, : self.seq_len]
 
@@ -583,8 +648,15 @@ class RETRO(nn.Module):
         embed = self.decoder(embed)
 
         # project to logits
+        logits = self.to_logits(embed)
 
-        return self.to_logits(embed)
+        if not return_loss:
+            return logits
+
+        # cross entropy loss
+
+        loss = F.cross_entropy(rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id)
+        return loss
 
     def forward(self, seq, retrieved=None, return_loss=False):
         """
@@ -596,9 +668,9 @@ class RETRO(nn.Module):
         """
 
         if not exists(retrieved):
-            return self.forward_without_retrieval(seq)
+            return self.forward_without_retrieval(seq, return_loss=return_loss)
 
-        assert not (return_loss and not self.training), "must be training if returning loss"
+        # assert not (return_loss and not self.training), 'must be training if returning loss'
 
         # assume padding token id (usually 0.) is to be masked out
 
