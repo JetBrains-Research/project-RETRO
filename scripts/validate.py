@@ -6,8 +6,9 @@ seed_all(1111)
 
 import argparse
 import gc
-from omegaconf import OmegaConf
 import time
+
+from omegaconf import OmegaConf
 
 from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
 from retro_pytorch.retro_pytorch import RETRO
