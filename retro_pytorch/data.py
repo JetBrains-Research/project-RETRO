@@ -122,19 +122,6 @@ class RETRODataset(Dataset):
         retrieved_torch = torch.from_numpy(retrieved).long()
         return seq_tokens_torch, retrieved_torch
 
-
-"""
-Dataset for the reading data from jsonl file
-"""
-
-import os
-
-import jsonlines
-from torch.utils.data import DataLoader
-
-from retro_pytorch.retrieval import doc_text_to_chunks_and_seq_indices
-
-
 def split_into_chunks(seq_tokens, seq_length, pad_id=0):
     # Calculate the number of chunks needed
     num_chunks = len(seq_tokens) // seq_length
