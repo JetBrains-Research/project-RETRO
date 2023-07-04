@@ -4,14 +4,14 @@ from retro_pytorch.utils import seed_all
 
 seed_all(1111)
 
-from retro_pytorch.retro_pytorch import RETRO
-from retro_pytorch.training import TrainingWrapper
-from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
-from retro_pytorch.train_functions import val_steps
-
-import time
-import gc
 import argparse
+import gc
+import time
+
+from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
+from retro_pytorch.retro_pytorch import RETRO
+from retro_pytorch.train_functions import val_steps
+from retro_pytorch.training import TrainingWrapper
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("-no", "--no-retrieve", action="store_true", help="Do not retrieve if flag added")

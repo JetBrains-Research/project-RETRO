@@ -122,6 +122,7 @@ class RETRODataset(Dataset):
         retrieved_torch = torch.from_numpy(retrieved).long()
         return seq_tokens_torch, retrieved_torch
 
+
 def split_into_chunks(seq_tokens, seq_length, pad_id=0):
     # Calculate the number of chunks needed
     num_chunks = len(seq_tokens) // seq_length

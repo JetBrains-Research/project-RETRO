@@ -1,15 +1,16 @@
 from retro_pytorch.utils import seed_all
 
 seed_all(1111)
-from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
-from retro_pytorch.retro_pytorch import RETRO
-from retro_pytorch.training import TrainingWrapper
-from retro_pytorch.train_functions import calc_loss, grad_step, val_steps, val_upadate
-
+import argparse
 import time
 from datetime import datetime
+
 from tqdm import tqdm
-import argparse
+
+from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
+from retro_pytorch.retro_pytorch import RETRO
+from retro_pytorch.train_functions import calc_loss, grad_step, val_steps, val_upadate
+from retro_pytorch.training import TrainingWrapper
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("-no", "--no-retrieve", action="store_true", help="Do not retrieve if flag added")

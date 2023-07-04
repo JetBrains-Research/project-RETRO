@@ -1,7 +1,9 @@
+from typing import Any, Callable, Iterator, TextIO
+
 import torch
 from tqdm import tqdm
+
 from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
-from typing import Iterator, Callable, Any, TextIO
 
 
 def calc_loss(

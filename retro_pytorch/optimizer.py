@@ -1,9 +1,10 @@
+from typing import Any, Generator
+
 import torch
 from torch.optim import AdamW
 
 # from torch.optim.lr_scheduler import StepLR
 from transformers import get_cosine_schedule_with_warmup
-from typing import Any, Generator
 
 
 def separate_weight_decayable_params(params):

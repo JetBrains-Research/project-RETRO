@@ -1,12 +1,10 @@
+import os
+from typing import Callable, Iterator, Optional, Union
+
+import jsonlines
 import torch
 import torch.nn.functional as F
-
-import os
-import jsonlines
-from typing import Iterator, Callable, Optional, Union
-
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from retro_pytorch.retrieval import doc_text_to_chunks_and_seq_indices
 
