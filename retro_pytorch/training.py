@@ -83,7 +83,7 @@ def top_p(logits, thres=0.9):
     return sorted_logits.scatter(1, sorted_indices, sorted_logits)
 
 
-def aware(text=""):
+def aware(text: str = "") -> None:
     pass
     # response = input(f"To {text} press any key: ")
     # if response.lower() == "y" or response.lower() == "yes":
@@ -264,7 +264,7 @@ class TrainingWrapper(nn.Module):
             pad_with_os=False,
         )
 
-    def fetch_neighbours(self, seq, doc_except):
+    def fetch_neighbours(self, seq: torch.Tensor, doc_except: torch.Tensor) -> torch.Tensor:
         # global neighbor_doc_ids, neighbor_from_same_doc, distances
 
         b, seq_len = seq.shape

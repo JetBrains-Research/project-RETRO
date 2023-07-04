@@ -1,40 +1,53 @@
-import random
+from retro_pytorch.utils import seed_all
 
-import numpy as np
-import torch
-
-seed = 1111
-random.seed(seed)
-torch.manual_seed(seed)
-np.random.seed(seed)
-torch.cuda.manual_seed_all(seed)
+seed_all(1111)
+from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
+from retro_pytorch.retro_pytorch import RETRO
+from retro_pytorch.training import TrainingWrapper
+from retro_pytorch.train_functions import calc_loss, grad_step, val_steps, val_upadate
 
 import time
 from datetime import datetime
-
 from tqdm import tqdm
+import argparse
 
-from retro_pytorch.data import DataLoader_from_file, Dataset_jsonl
-from retro_pytorch.retro_pytorch import RETRO
-from retro_pytorch.training import TrainingWrapper
+parser = argparse.ArgumentParser(description="")
+parser.add_argument("-no", "--no-retrieve", action="store_true", help="Do not retrieve if flag added")
+args = parser.parse_args()
+no_retrieve = args.no_retrieve
 
-# %%
-
-### Important notes!!!!
-### !!!! I had to change autofaiss files C:\Users\Timur.Galimzyanov\anaconda3\lib\site-packages\autofaiss\indices\index_utils.py
-### line 23     with NamedTemporaryFile() as tmp_file: -->> with NamedTemporaryFile(delete=False) as tmp_file:
-
-# %%
-
+# Use the arguments in your program
+if no_retrieve:
+    print(f"NO retrieve during training")
+    add_flag = "_no_retrieve"
+else:
+    print(f"Retrieval would be used during training")
+    add_flag = ""
 
 """
-Creates embeddings and finding knns for each chuncks in dataset
+Training. Add flag --no-retrieve or -no if you want to train without retrieval.
+It would add '_no_retrieve' to output filenames (model and train/val loss tracking)
 """
 
-import gc
+# declaring pathes # TODO maybe move them into config file
+texts_folder = "../../data/texts_folder/"
+data_folder = "../../data/full_dataset/"
+model_folder = "../../data/models/"
+out_folder = "../out_dir/"
+model_name = "retro" + add_flag
+
+tain_data_path = data_folder + "train.jsonl"
+val_data_path = data_folder + "val.jsonl"
+
+### output files
+filename_train = "losses_train_dev"
+filename_val = "losses_val_dev"
+filename_train = out_folder + filename_train + add_flag + ".txt"
+filename_val = out_folder + filename_val + add_flag + ".txt"
+f_train = open(filename_train, "a")
+f_val = open(filename_val, "a")
 
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
-
 retro = RETRO(
     max_seq_len=512,  # max sequence length
     enc_dim=768,  # encoder model dimension
@@ -52,20 +65,6 @@ retro = RETRO(
     dec_attn_dropout=0.25,  # decoder attention dropout
     dec_ff_dropout=0.25,  # decoder feedforward dropout
 ).cuda()
-
-# %%
-
-texts_folder = "../../data/texts_folder/"
-data_folder = "../../data/full_dataset/"
-model_folder = "../../data/models/"
-out_folder = "../out_dir/"
-model_name = "retro"
-
-tain_data_path = data_folder + "train.jsonl"
-val_data_path = data_folder + "val.jsonl"
-
-gc.collect()
-torch.cuda.empty_cache()
 
 wrapper_db = TrainingWrapper(
     retro=retro,  # path to retro instance
@@ -87,47 +86,43 @@ wrapper_db = TrainingWrapper(
 
 # %%
 
-batch_size = 14
-batch_accumulation = 64
+### setting up number of steps. freq_val - frequency of validation, num_val - number of validation steps
+
+freq_val = 6
+num_val = 6
+batch_size = 2
+batch_accumulation = 6  # 64
+total_items = 1367016
+
 accumulate_steps = accumulate_steps = (
     batch_accumulation // batch_size if batch_accumulation % batch_size == 0 else batch_accumulation // batch_size + 1
 )
 batch_accumulation = accumulate_steps * batch_size
-total_items = 1367016
 total_steps = total_items // batch_accumulation
 warmup_steps = total_steps // 25  ### 4% for warmup
 lr = 3e-4
 
+### Ensure that validation is performed after taking the gradient step.
+freq_val = (freq_val // accumulate_steps) * accumulate_steps
 
-train_ds = Dataset_jsonl(tain_data_path, cnunk_size=64, seq_length=512, pad_id=0)
-val_ds = Dataset_jsonl(val_data_path, cnunk_size=64, seq_length=512, pad_id=0)
-
-train_dl = DataLoader_from_file(train_ds, batch_size=batch_size)
-val_dl = DataLoader_from_file(val_ds, batch_size=batch_size)
+# loading data and optimization functions.
+train_ds = DatasetJsonl(tain_data_path, cnunk_size=64, seq_length=512, pad_id=0)
+val_ds = DatasetJsonl(val_data_path, cnunk_size=64, seq_length=512, pad_id=0)
+train_dl = DataLoaderFromFile(train_ds, batch_size=batch_size)
+val_dl = DataLoaderFromFile(val_ds, batch_size=batch_size)
 
 optim, scheduler = wrapper_db.get_optimizer(warmup_steps=warmup_steps, training_steps=total_steps, lr=lr, wd=0.01)
 scheduler.step()
 fetch_neighbours = wrapper_db.fetch_neighbours
 
 # %%
-# n_iter = 100
 
-losses_train = []
-losses_val = []
+losses_train: list[float] = []
+losses_val: list[float] = []
 train_steps = 0
-
 max_val_loss = 10000
-freq_val = 1000
-num_val = 200
-# freq_val = 10
-# num_val = 10
-### Ensure that validation is performed after taking the gradient step.
-freq_val = (freq_val // accumulate_steps) * accumulate_steps
 
-f_train = open(out_folder + "losses_train_optim.txt", "a")
-f_val = open(out_folder + "losses_val_optim.txt", "a")
-current_time = datetime.now()
-text_start = f"\n------- NEW TRAINING {str(current_time)}, batch size = {batch_size}, batch_accum = {batch_accumulation}, warmup steps = {warmup_steps}, validation frequency = {freq_val}, learining rate = {lr}-------\n"
+text_start = f"\n------- NEW TRAINING {str(datetime.now())}, batch size = {batch_size}, batch_accum = {batch_accumulation}, warmup steps = {warmup_steps}, validation frequency = {freq_val}, learining rate = {lr}-------\n"
 f_train.write(text_start)
 f_val.write(text_start)
 print(text_start)
@@ -135,80 +130,30 @@ print(text_start)
 tt = time.time()
 
 saved_ind = 0
-
 val_dl_iter = iter(val_dl)
 
-for seq, docs in tqdm(train_dl, total=total_steps):
-    seq = seq.cuda()
-    retrieved = fetch_neighbours(seq, doc_except=docs)
+for train_steps, (seq, docs) in enumerate(tqdm(train_dl, total=total_steps), start=1):
 
-    train_steps += 1
-    loss = retro(seq, retrieved=retrieved, return_loss=True)
-
-    del seq, retrieved
-    # gradient step
-    loss.backward()
+    loss = calc_loss(seq, docs, retro, no_retrieve, fetch_neighbours)
 
     if train_steps % accumulate_steps == 0:
-        optim.step()
-        optim.zero_grad()
-        scheduler.step()
-        losses_train.append(loss.item())
-        f_train.write(str(loss.item()) + "\n")
-        # del loss
-
-    # if i > n_iter:
-    #    break
-
-    losses_val_cur = []
+        grad_step(optim, scheduler, loss, losses_train, f_train)
 
     if train_steps % freq_val == 0:
-        retro.eval()
+
         f_train.flush()
-        gc.collect()
-        torch.cuda.empty_cache()
-        print("------ Validation ------")
-        val_step = 0
-        for seq, docs in tqdm(val_dl_iter, total=num_val, ncols=80):
-            # print(docs)
-            val_step += 1
-            seq = seq.cuda()
-            retrieved = fetch_neighbours(seq, doc_except=docs)
-
-            loss = retro(seq, retrieved=retrieved, return_loss=True)
-
-            losses_val_cur.append(loss.item())
-            del loss, seq, retrieved
-
-            if val_step >= num_val:
-                break
+        losses_val_cur, val_step = val_steps(retro, no_retrieve, fetch_neighbours, num_val, val_dl_iter)
+        max_val_loss, saved_ind, val_dl_iter = val_upadate(
+            retro, losses_val, losses_val_cur, model_folder, model_name, val_dl_iter, f_val, max_val_loss, saved_ind
+        )
 
         if val_step < num_val:
             print("----- Reloading val dataset ------")
-            val_ds = Dataset_jsonl(val_data_path, cnunk_size=64, seq_length=512, pad_id=0)
-            val_dl = DataLoader_from_file(val_ds, batch_size=batch_size)
+            val_ds = DatasetJsonl(val_data_path, cnunk_size=64, seq_length=512, pad_id=0)
+            val_dl = DataLoaderFromFile(val_ds, batch_size=batch_size)
             val_dl_iter = iter(val_dl)
 
-        if len(losses_val_cur) != 0:
-            loss_cur = sum(losses_val_cur) / (len(losses_val_cur))
-            losses_val.append(loss_cur)
-            f_val.write(str(loss_cur) + "\n")
-            f_val.flush()
-
-            print("---- Saving the last model -----")
-            model_file_name = model_folder + f"{model_name}_last.pth"
-            torch.save(retro.state_dict(), model_file_name)
-
-            if loss_cur < max_val_loss:
-                max_val_loss = loss_cur
-                print("---- Saving the best model -----")
-                model_file_name = model_folder + f"{model_name}_best_{saved_ind}.pth"
-                torch.save(retro.state_dict(), model_file_name)
-                saved_ind = (saved_ind + 1) % 3
-
         retro.train()
-        gc.collect()
-        torch.cuda.empty_cache()
 
 time_used = time.time() - tt
 print(f"Time used = {time_used:.2f} s")

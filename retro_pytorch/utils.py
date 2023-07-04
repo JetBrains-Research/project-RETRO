@@ -4,6 +4,8 @@ from pathlib import Path
 from shutil import rmtree
 
 import numpy as np
+import torch
+import random
 
 
 def is_true_env_flag(env_flag):
@@ -21,3 +23,10 @@ def memmap(*args, **kwargs):
     pointer = np.memmap(*args, **kwargs)
     yield pointer
     del pointer
+
+
+def seed_all(seed: int) -> None:
+    random.seed(seed)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    torch.cuda.manual_seed_all(seed)

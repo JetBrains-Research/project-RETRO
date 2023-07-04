@@ -1,6 +1,9 @@
+import torch
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import StepLR
+
+# from torch.optim.lr_scheduler import StepLR
 from transformers import get_cosine_schedule_with_warmup
+from typing import Any, Generator
 
 
 def separate_weight_decayable_params(params):
@@ -10,13 +13,13 @@ def separate_weight_decayable_params(params):
 
 
 def get_optimizer(
-    params,
-    warmup_steps,
-    training_steps,
-    lr=3e-4,
-    wd=1e-1,
-    filter_by_requires_grad=False,
-):
+    params: Any,
+    warmup_steps: int,
+    training_steps: int,
+    lr: float = 3e-4,
+    wd: float = 1e-1,
+    filter_by_requires_grad: bool = False,
+) -> tuple[Any, Any]:
     if filter_by_requires_grad:
         params = list(filter(lambda t: t.requires_grad, params))
 

@@ -7,7 +7,7 @@ import torch
 from tqdm import tqdm
 from transformers import AutoTokenizer, T5ForConditionalGeneration
 
-from retro_pytorch.data import DataLoader_from_file, Dataset_jsonl
+from retro_pytorch.data import DataLoader_from_file, DatasetJsonl
 from retro_pytorch.retro_pytorch import RETRO
 from retro_pytorch.training import TrainingWrapper
 
@@ -100,8 +100,8 @@ def seq_distance(seq1, seq2):
 
 batch_size = 1
 
-train_ds = Dataset_jsonl(tain_data_path, cnunk_size=64, seq_length=512, pad_id=0)
-val_ds = Dataset_jsonl(val_data_path, cnunk_size=64, seq_length=512, pad_id=0)
+train_ds = DatasetJsonl(tain_data_path, cnunk_size=64, seq_length=512, pad_id=0)
+val_ds = DatasetJsonl(val_data_path, cnunk_size=64, seq_length=512, pad_id=0)
 
 train_dl = iter(DataLoader_from_file(train_ds, batch_size=batch_size))
 val_dl = iter(DataLoader_from_file(val_ds, batch_size=batch_size))
