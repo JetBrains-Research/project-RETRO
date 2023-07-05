@@ -3,6 +3,7 @@ from pathlib import Path
 import faiss
 import jsonlines
 import numpy as np
+from omegaconf import OmegaConf
 import torch
 import torch.nn.functional as F
 from autofaiss import build_index
@@ -12,19 +13,14 @@ from transformers import AutoTokenizer, T5ForConditionalGeneration
 
 from retro_pytorch.utils import memmap, reset_folder_
 
-# constants
+### TODO I do not know how to pass config name here from the main script
+conf_load = OmegaConf.load('config.yaml')
+paths = conf_load.paths
 
-SOS_ID = 101
-EOS_ID = 102
-BERT_MODEL_DIM = 768
-BERT_VOCAB_SIZE = 28996
-
-TMP_PATH = Path("./.tmp")
-INDEX_FOLDER_PATH = TMP_PATH / ".index"
-EMBEDDING_TMP_SUBFOLDER = "embeddings"
+# conf_load = OmegaConf.load("config.yaml")
+# paths = conf_load.paths
 
 # helper functions
-
 
 def exists(val):
     return val is not None
@@ -48,13 +44,9 @@ def faiss_read_index(path):
 
 # singleton globals
 
-MODEL = None
-TOKENIZER = None
-
-print("---- Using CodeT5p-220M model for embedding----")
-model_path = "../../models/CodeT5p-220M/"
-TOKENIZER = AutoTokenizer.from_pretrained(model_path)
-MODEL = T5ForConditionalGeneration.from_pretrained(model_path)
+print(conf_load.messages.embedder_init)
+TOKENIZER = AutoTokenizer.from_pretrained(paths.encoder_path)
+MODEL = T5ForConditionalGeneration.from_pretrained(paths.encoder_path)
 PAD_TOKEN = TOKENIZER.pad_token_id
 ISDECODER = True
 
@@ -63,6 +55,16 @@ BERT_MODEL_DIM = MODEL.base_model.encoder.embed_tokens.embedding_dim
 EOS_ID = TOKENIZER.eos_token_id
 SOS_ID = TOKENIZER.bos_token_id
 
+# constants
+
+# SOS_ID = 101
+# EOS_ID = 102
+# BERT_MODEL_DIM = 768
+# BERT_VOCAB_SIZE = 28996
+
+TMP_PATH = Path(paths.tmp_path)
+INDEX_FOLDER_PATH = TMP_PATH / paths.index_folder
+EMBEDDING_TMP_SUBFOLDER = paths.embedding_tmp_subfolder
 
 def get_tokenizer():
     global TOKENIZER

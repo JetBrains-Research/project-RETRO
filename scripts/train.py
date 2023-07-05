@@ -15,8 +15,10 @@ from retro_pytorch.training import TrainingWrapper
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("-no", "--no-retrieve", action="store_true", help="Do not retrieve if flag added")
+parser.add_argument("-config", "--config", default="config.yaml", help="Config filename")
 args = parser.parse_args()
 no_retrieve = args.no_retrieve
+config_name = args.config
 
 # Use the arguments in your program
 if no_retrieve:
@@ -32,11 +34,12 @@ It would add '_no_retrieve' to output filenames (model and train/val loss tracki
 """
 
 # # loading pathes
-conf_load = OmegaConf.load("config.yaml")
-paths = conf_load["paths"]
+print(f'Loading configs from {config_name} file')
+conf_load = OmegaConf.load(config_name)
+paths = conf_load.paths
 
 model_name = paths.model_name + add_flag
-tain_data_path = paths.data_folder + paths.tain_data_file
+tain_data_path = paths.data_folder + paths.train_data_file
 val_data_path = paths.data_folder + paths.val_data_file
 filename_train = paths.out_folder + paths.out_filename_train + add_flag + ".txt"
 filename_val = paths.out_folder + paths.out_filename_val + add_flag + ".txt"
@@ -84,11 +87,10 @@ wrapper_db = TrainingWrapper(
 # %%
 
 ### setting up number of steps. freq_val - frequency of validation, num_val - number of validation steps
-
-freq_val = 6
-num_val = 6
-batch_size = 2
-batch_accumulation = 6  # 64
+freq_val = 1000
+num_val = 200
+batch_size = 14
+batch_accumulation = 64
 total_items = 1367016
 
 accumulate_steps = accumulate_steps = (

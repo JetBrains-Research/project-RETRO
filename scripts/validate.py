@@ -17,8 +17,10 @@ from retro_pytorch.training import TrainingWrapper
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("-no", "--no-retrieve", action="store_true", help="Do not retrieve if flag added")
+parser.add_argument("-config", "--config", default="config.yaml", help="Config filename")
 args = parser.parse_args()
 no_retrieve = args.no_retrieve
+config_name = args.config
 
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
 
@@ -38,8 +40,9 @@ retro = RETRO(
 #%%
 
 # # loading pathes
-conf_load = OmegaConf.load("config.yaml")
-paths = conf_load["paths"]
+print(f'Loading configs from {config_name} file')
+conf_load = OmegaConf.load(config_name)
+paths = conf_load.paths
 
 val_data_path = paths.data_folder + paths.val_data_file
 

@@ -9,8 +9,8 @@ paths:
   tmp_path: ./.tmp
   index_folder: .index
   embedding_tmp_subfolder: embeddings
-  model_name: retro
+  model_name: retro_dev
   train_data_file: train.jsonl
   val_data_file: val.jsonl
-  out_filename_train: losses_train
-  out_filename_val: losses_val
+  out_filename_train: losses_train_dev
+  out_filename_val: losses_val_dev

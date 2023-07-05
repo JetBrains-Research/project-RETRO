@@ -20,7 +20,6 @@ def calc_loss(
         retrieved = None
 
     loss = model(seq.cuda(), retrieved=retrieved, return_loss=True)
-    del seq, retrieved
     loss.backward()
 
     return loss
@@ -32,7 +31,7 @@ def grad_step(optimizer: Any, scheduler: Any, loss: Any, loss_train_list: list[f
     scheduler.step()
     loss_train_list.append(loss.item())
     out_file.write(str(loss.item()) + "\n")
-    del loss
+    #del loss
 
 
 def save_model(prefix: str, model: Any, model_folder: str, model_name: str) -> None:
