@@ -40,7 +40,7 @@ retro = RETRO(
 #%%
 
 # # loading pathes
-print(f'Loading configs from {config_name} file')
+print(f"Loading configs from {config_name} file")
 conf_load = OmegaConf.load(config_name)
 paths = conf_load.paths
 
@@ -69,7 +69,10 @@ wrapper_db = TrainingWrapper(
 
 #%%
 
-batch_size = 6
+# def random_seq():
+#     torch.randint(0, 30000)
+
+batch_size = 16
 total_items = 136701
 
 print(f"Batch size = {batch_size}")
@@ -79,17 +82,15 @@ val_dl = DataLoaderFromFile(val_ds, batch_size=batch_size)
 val_dl_iter = iter(val_dl)
 
 fetch_neighbours = wrapper_db.fetch_neighbours
-losses_val = []
+losses_val: list[float] = []
 
 # model_file = model_folder + 'retro_no_retrieve_last.pth'
-model_file = paths.model_folder + "retro_last.pth"
+model_file = paths.model_folder + "retro_best_0.pth"
 retro.load_state_dict(torch.load(model_file))
 retro.eval()
 
 tt = time.time()
-losses_val, _ = val_steps(retro, no_retrieve, fetch_neighbours, num_val=None, val_dl_iter=val_dl_iter)
-
-# f_val_total = open(out_folder + "losses_val_final.txt", "a")
+losses_val, _ = val_steps(retro, no_retrieve, fetch_neighbours, num_val=100, val_dl_iter=val_dl_iter)
 
 val_avg = sum(losses_val) / len(losses_val)
 print(f"Average validation loss = {val_avg}")

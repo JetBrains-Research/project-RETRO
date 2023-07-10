@@ -1,27 +1,35 @@
+from retro_pytorch.utils import seed_all
+
+seed_all(1111)
+import argparse
 import gc
-import sys
 import time
 
 import torch
+from omegaconf import OmegaConf
 
 from retro_pytorch.retro_pytorch import RETRO
 from retro_pytorch.training import TrainingWrapper
+
+parser = argparse.ArgumentParser(description="")
+parser.add_argument("-config", "--config", default="config.yaml", help="Config filename")
+args = parser.parse_args()
+config_name = args.config
+
+print(f"Loading configs from {config_name} file")
+conf_load = OmegaConf.load(config_name)
+paths = conf_load.paths
+
 
 """
 Create your chunks and chunk start indices (for calculating sequence ranges for autoregressive training) using text_folder_to_chunks_
 Creates embeddings and finding knns for each chuncks in dataset
 """
 
-# for n_chuncks, split in zip([2_000_000, 2_000_000, 20_000_000], ['val', 'test', 'train']):
-# for n_chuncks, split in zip([20_000_000], ['train']):
-
 n_chuncks = 15_000_000
-# n_chuncks = 1_000_000
+# n_chuncks = 700_000
 
-# texts_folder = '../../data/texts_folder/'
-texts_folder = "../../data/texts_folder/"
-data_folder = "../../data/full_dataset/"
-# print('-------' + split + '-------')
+texts_folder = paths.texts_folder
 
 gc.collect()
 torch.cuda.empty_cache()
@@ -52,14 +60,13 @@ wrapper = TrainingWrapper(
     retro=retro,  # path to retro instance
     knn=2,  # knn (2 in paper was sufficient)
     chunk_size=64,  # chunk size (64 in paper)
-    documents_path=data_folder,  # path to folder of text
+    documents_path=paths.data_folder,  # path to folder of text
     # glob = '**/*.txt',                             # text glob
     data_file_paths=[
-        data_folder + "val.jsonl",
-        data_folder + "test.jsonl",
-        data_folder + "train.jsonl",
+        paths.data_folder + "val.jsonl",
+        # paths.data_folder + "test.jsonl",
+        # paths.data_folder + "train.jsonl",
     ],
-    # data_file_paths = [data_folder + 'val.jsonl'],
     chunks_memmap_path=texts_folder + "train.chunks.dat",  # path to chunks
     seqs_memmap_path=texts_folder + "train.seq.dat",  # path to sequence data
     doc_ids_memmap_path=texts_folder

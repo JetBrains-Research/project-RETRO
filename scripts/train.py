@@ -15,7 +15,7 @@ from retro_pytorch.training import TrainingWrapper
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("-no", "--no-retrieve", action="store_true", help="Do not retrieve if flag added")
-parser.add_argument("-config", "--config", default="config.yaml", help="Config filename")
+parser.add_argument("-config", "--config", default="config_dev.yaml", help="Config filename")
 args = parser.parse_args()
 no_retrieve = args.no_retrieve
 config_name = args.config
@@ -34,12 +34,12 @@ It would add '_no_retrieve' to output filenames (model and train/val loss tracki
 """
 
 # # loading pathes
-print(f'Loading configs from {config_name} file')
+print(f"Loading configs from {config_name} file")
 conf_load = OmegaConf.load(config_name)
 paths = conf_load.paths
 
 model_name = paths.model_name + add_flag
-tain_data_path = paths.data_folder + paths.train_data_file
+train_data_path = paths.data_folder + paths.train_data_file
 val_data_path = paths.data_folder + paths.val_data_file
 filename_train = paths.out_folder + paths.out_filename_train + add_flag + ".txt"
 filename_val = paths.out_folder + paths.out_filename_val + add_flag + ".txt"
@@ -80,6 +80,7 @@ wrapper_db = TrainingWrapper(
     # max_chunks = n_chuncks,                        # maximum cap to chunks
     # max_seqs = n_chuncks//5,                            # maximum seqs
     knn_extra_neighbors=100,  # num extra neighbors to fetch
+    precalculate_knn=False,
     max_index_memory_usage="10G",
     current_memory_available="32G",
 )
@@ -105,7 +106,7 @@ lr = 3e-4
 freq_val = (freq_val // accumulate_steps) * accumulate_steps
 
 # loading data and optimization functions.
-train_ds = DatasetJsonl(tain_data_path, cnunk_size=64, seq_length=512, pad_id=0)
+train_ds = DatasetJsonl(train_data_path, cnunk_size=64, seq_length=512, pad_id=0)
 val_ds = DatasetJsonl(val_data_path, cnunk_size=64, seq_length=512, pad_id=0)
 train_dl = DataLoaderFromFile(train_ds, batch_size=batch_size)
 val_dl = DataLoaderFromFile(val_ds, batch_size=batch_size)
@@ -119,7 +120,7 @@ fetch_neighbours = wrapper_db.fetch_neighbours
 losses_train: list[float] = []
 losses_val: list[float] = []
 train_steps = 0
-max_val_loss = 10000
+max_val_loss = 10000.0
 
 text_start = f"\n------- NEW TRAINING {str(datetime.now())}, batch size = {batch_size}, batch_accum = {batch_accumulation}, warmup steps = {warmup_steps}, validation frequency = {freq_val}, learining rate = {lr}-------\n"
 f_train.write(text_start)
@@ -131,7 +132,7 @@ tt = time.time()
 saved_ind = 0
 val_dl_iter = iter(val_dl)
 
-for train_steps, (seq, docs) in enumerate(tqdm(train_dl, total=total_steps), start=1):
+for train_steps, (seq, docs) in enumerate(tqdm(train_dl, total=total_items // batch_size), start=1):
 
     loss = calc_loss(seq, docs, retro, no_retrieve, fetch_neighbours)
 

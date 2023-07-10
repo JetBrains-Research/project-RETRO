@@ -15,8 +15,8 @@ from retro_pytorch.retrieval import (
     EOS_ID,
     PAD_TOKEN,
     SOS_ID,
-    bert_embed,
     chunks_to_precalculated_knn_,
+    embed,
     text_folder_to_chunks_,
 )
 from retro_pytorch.retro_pytorch import RETRO
@@ -112,7 +112,6 @@ def knn_chunks_from_seq_chunks(
     chunks_memmap_path,
     doc_except=None,
     pad_with_os=True,
-    isdecoder=False,
 ):
     b, device = seq_chunks.shape[0], seq_chunks.device
 
@@ -125,7 +124,7 @@ def knn_chunks_from_seq_chunks(
         seq_chunks = torch.cat((sos, seq_chunks, eos), dim=1)
 
     # embed with frozen MODEL
-    embeds = bert_embed(seq_chunks.cpu(), isdecoder=isdecoder)  # fetch embeds on CPU for now # seq_chunks.cpu()
+    embeds = embed(seq_chunks.cpu())  # fetch embeds on CPU for now # seq_chunks.cpu()
 
     # retrieval of knn with faiss
 
@@ -165,6 +164,7 @@ class TrainingWrapper(nn.Module):
         knn_extra_neighbors=100,
         processed_stats_json_path="./processed-stats.json",
         faiss_index_filename="knn.index",
+        precalculate_knn=False,
         **index_kwargs,
     ):
         super().__init__()
@@ -223,6 +223,7 @@ class TrainingWrapper(nn.Module):
             num_extra_neighbors=knn_extra_neighbors,
             index_file=faiss_index_filename,
             force_reprocess=force_reprocess,
+            precalculate_knn=precalculate_knn,
             **index_kwargs,
         )
 
@@ -280,7 +281,6 @@ class TrainingWrapper(nn.Module):
             past_seq_chunks,
             doc_except=doc_except,
             knn=total_neighbors_to_fetch,
-            isdecoder=True,
         )
 
         with memmap(

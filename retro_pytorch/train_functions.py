@@ -31,7 +31,6 @@ def grad_step(optimizer: Any, scheduler: Any, loss: Any, loss_train_list: list[f
     scheduler.step()
     loss_train_list.append(loss.item())
     out_file.write(str(loss.item()) + "\n")
-    #del loss
 
 
 def save_model(prefix: str, model: Any, model_folder: str, model_name: str) -> None:
