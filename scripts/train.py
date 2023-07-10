@@ -5,17 +5,18 @@ import argparse
 import time
 from datetime import datetime
 
+import numpy as np
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
 from retro_pytorch.retro_pytorch import RETRO
-from retro_pytorch.train_functions import calc_loss, grad_step, val_steps, val_upadate
+from retro_pytorch.train_functions import aggregate_batches, calc_loss, grad_step, val_steps, val_upadate
 from retro_pytorch.training import TrainingWrapper
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("-no", "--no-retrieve", action="store_true", help="Do not retrieve if flag added")
-parser.add_argument("-config", "--config", default="config_dev.yaml", help="Config filename")
+parser.add_argument("-config", "--config", default="config.yaml", help="Config filename")
 args = parser.parse_args()
 no_retrieve = args.no_retrieve
 config_name = args.config
@@ -33,7 +34,7 @@ Training. Add flag --no-retrieve or -no if you want to train without retrieval.
 It would add '_no_retrieve' to output filenames (model and train/val loss tracking)
 """
 
-# # loading pathes
+## loading pathes
 print(f"Loading configs from {config_name} file")
 conf_load = OmegaConf.load(config_name)
 paths = conf_load.paths
@@ -114,11 +115,15 @@ val_dl = DataLoaderFromFile(val_ds, batch_size=batch_size)
 optim, scheduler = wrapper_db.get_optimizer(warmup_steps=warmup_steps, training_steps=total_steps, lr=lr, wd=0.01)
 scheduler.step()
 fetch_neighbours = wrapper_db.fetch_neighbours
+fetch_random_chunk = wrapper_db.fetch_random_chunk
+generate_pure_random_chunk = wrapper_db.fetch_random_chunk
 
 # %%
 
 losses_train: list[float] = []
-losses_val: list[float] = []
+losses_val: list[list[float]] = []
+losses_val_pure_rnd: list[float] = []
+losses_val_chunk_rnd: list[float] = []
 train_steps = 0
 max_val_loss = 10000.0
 
@@ -130,6 +135,7 @@ print(text_start)
 tt = time.time()
 
 saved_ind = 0
+saved_last_ind = 0
 val_dl_iter = iter(val_dl)
 
 for train_steps, (seq, docs) in enumerate(tqdm(train_dl, total=total_items // batch_size), start=1):
@@ -142,17 +148,23 @@ for train_steps, (seq, docs) in enumerate(tqdm(train_dl, total=total_items // ba
     if train_steps % freq_val == 0:
 
         f_train.flush()
-        losses_val_cur, val_step = val_steps(retro, no_retrieve, fetch_neighbours, num_val, val_dl_iter)
-        max_val_loss, saved_ind, val_dl_iter = val_upadate(
+        aggregate, val_step = aggregate_batches(val_dl_iter, num_val)
+        # losses_val_cur, val_step = val_steps(retro, no_retrieve, fetch_neighbours, num_val, val_dl_iter)
+        losses_val_cur = val_steps(retro, no_retrieve, fetch_neighbours, aggregate)
+        losses_val_rnd_cur = val_steps(retro, no_retrieve, fetch_random_chunk, aggregate)
+        losses_val_pure_rnd_cur = val_steps(retro, no_retrieve, generate_pure_random_chunk, aggregate)
+
+        max_val_loss, saved_ind, saved_last_ind, val_dl_iter = val_upadate(
             retro,
             losses_val,
-            losses_val_cur,
+            [losses_val_cur, losses_val_rnd_cur, losses_val_pure_rnd_cur],
             paths.model_folder,
             model_name,
             val_dl_iter,
             f_val,
             max_val_loss,
             saved_ind,
+            saved_last_ind,
         )
 
         if val_step < num_val:

@@ -89,7 +89,7 @@ model_file = paths.model_folder + "retro_best_0.pth"
 retro.load_state_dict(torch.load(model_file))
 retro.eval()
 
-tt = time.time()
+tt = time.time()  ## TODO rewrite this procedure to match new trainig pipeline
 losses_val, _ = val_steps(retro, no_retrieve, fetch_neighbours, num_val=100, val_dl_iter=val_dl_iter)
 
 val_avg = sum(losses_val) / len(losses_val)

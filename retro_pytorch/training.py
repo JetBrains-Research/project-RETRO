@@ -15,6 +15,7 @@ from retro_pytorch.retrieval import (
     EOS_ID,
     PAD_TOKEN,
     SOS_ID,
+    VOCAB_SIZE,
     chunks_to_precalculated_knn_,
     embed,
     text_folder_to_chunks_,
@@ -208,8 +209,12 @@ class TrainingWrapper(nn.Module):
         num_seqs = self.stats["seqs"]
         self.knn_extra_neighbors = knn_extra_neighbors
         self.knn = knn
+        self.seq_len = retro.seq_len
         self.doc_ids_memmap_path = doc_ids_memmap_path
         self.chunks_memmap_path = chunks_memmap_path
+        self.all_chunks = np.memmap(
+            chunks_memmap_path, dtype=np.int32, mode="r", shape=(self.num_chunks, chunk_size + 1)
+        )
 
         # calculate knn memmap path and get the faiss index
         # todo - make sure if faiss_index_filename is found, do not reprocess unless flag is given
@@ -320,6 +325,31 @@ class TrainingWrapper(nn.Module):
             knn_chunks_torch = rearrange(knn_chunks_torch, "(b n) k c -> b n k c", b=b)
 
             return knn_chunks_torch
+
+    def fetch_random_chunk(self, seq, doc_except=None):
+
+        """
+        fetches random chunk from database
+        """
+
+        batch_size = seq.size(0)
+        seq_size = self.seq_len // self.chunk_size
+        n_samples = seq_size * batch_size * self.knn
+        start_indices = np.random.choice(self.all_chunks.shape[0] - 1, size=n_samples, replace=False)
+        selected_pairs = np.array([np.concatenate(self.all_chunks[i : i + 2, :-1]) for i in start_indices])
+        batch_shape = (batch_size, seq_size, self.knn, 2 * self.chunk_size)
+        return torch.tensor(selected_pairs.reshape(batch_shape)).cuda()
+
+    def generate_pure_random_chunk(self, seq, doc_except=None):
+
+        """
+        generates pure random швы sequence as a chunk
+        """
+
+        batch_size = seq.size(0)
+        seq_size = self.seq_len // self.chunk_size
+        batch_shape = (batch_size, seq_size, self.knn, 2 * self.chunk_size)
+        return torch.randint(0, VOCAB_SIZE, batch_shape).cuda()
 
     @torch.no_grad()
     @eval_decorator

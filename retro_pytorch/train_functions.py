@@ -39,50 +39,62 @@ def save_model(prefix: str, model: Any, model_folder: str, model_name: str) -> N
     torch.save(model.state_dict(), model_file_name)
 
 
-def val_steps(
-    model: Any,
-    no_retrieve: bool,
-    fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    num_val: int,
+def aggregate_batches(
     val_dl_iter: Iterator,
-) -> tuple[list[float], int]:
-    model.eval()
-    print("------ Validation ------")
-    losses_val_cur = []
-    for val_step, (seq, docs) in enumerate(tqdm(val_dl_iter, total=num_val, ncols=80), start=1):
-
-        loss = calc_loss(seq, docs, model, no_retrieve, fetch_neighbours)
-        losses_val_cur.append(loss.item())
+    num_val: int,
+) -> tuple[list[tuple[torch.Tensor, torch.Tensor]], int]:
+    batch_aggregate = []
+    val_step = 0
+    for val_step, (seq, docs) in enumerate(val_dl_iter, start=1):
+        batch_aggregate.append((seq, docs))
         if num_val is not None:
             if val_step >= num_val:
                 break
 
-    return losses_val_cur, val_step
+    return batch_aggregate, val_step
+
+
+def val_steps(
+    model: Any,
+    no_retrieve: bool,
+    fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    aggregate: list[tuple[torch.Tensor, torch.Tensor]],
+) -> list[float]:
+    model.eval()
+    print("------ Validation ------")
+    losses_val_cur = []
+    for seq, docs in tqdm(aggregate, ncols=80):
+        loss = calc_loss(seq, docs, model, no_retrieve, fetch_neighbours)
+        losses_val_cur.append(loss.item())
+
+    return losses_val_cur
 
 
 def val_upadate(
     model: Any,
-    losses_val: list[float],
-    losses_val_cur: list[float],
+    losses_val: list[list[float]],
+    losses_val_cur: list[list[float]],
     model_folder: str,
     model_name: str,
     val_dl_iter: Iterator,
     f_val: TextIO,
     max_val_loss: float,
     saved_ind: int,
-) -> tuple[float, int, Iterator]:
+    saved_last_ind: int,
+) -> tuple[float, int, int, Iterator]:
 
     if len(losses_val_cur) != 0:
-        loss_cur = sum(losses_val_cur) / (len(losses_val_cur))
+        loss_cur = [sum(losses_cur) / (len(losses_cur)) for losses_cur in losses_val_cur]
         losses_val.append(loss_cur)
         f_val.write(str(loss_cur) + "\n")
         f_val.flush()
 
-        save_model("last", model, model_folder, model_name)
+        save_model("last_" + str(saved_last_ind), model, model_folder, model_name)
+        saved_last_ind = (saved_last_ind + 1) % 3
 
-        if loss_cur < max_val_loss:
-            max_val_loss = loss_cur
+        if loss_cur[0] < max_val_loss:
+            max_val_loss = loss_cur[0]
             save_model(f"best_{saved_ind}", model, model_folder, model_name)
             saved_ind = (saved_ind + 1) % 3
 
-    return max_val_loss, saved_ind, val_dl_iter
+    return max_val_loss, saved_ind, saved_last_ind, val_dl_iter
