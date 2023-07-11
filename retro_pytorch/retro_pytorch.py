@@ -609,6 +609,7 @@ class RETRO(nn.Module):
             norm_klass=norm_klass,
             scale_residual=enc_scale_residual,
             output_dim=dec_dim,
+            heads=heads,
         )
 
         self.decoder = Decoder(
@@ -621,6 +622,7 @@ class RETRO(nn.Module):
             post_norm=use_deepnet,
             norm_klass=norm_klass,
             scale_residual=dec_scale_residual,
+            heads=heads,
         )
 
         self.to_logits = nn.Linear(dec_dim, num_tokens)
