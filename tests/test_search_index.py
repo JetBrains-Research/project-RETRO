@@ -6,6 +6,7 @@ from typing import Any
 import faiss
 import numpy as np
 from omegaconf import OmegaConf
+import os
 
 # %%
 
@@ -22,9 +23,9 @@ print(f"Loading configs from {config_name} file")
 conf_load = OmegaConf.load(config_name)
 paths = conf_load.paths
 
-stats = json.load(open(paths.texts_folder + "processed-stats.json"))
+stats = json.load(open(os.path.join(paths.texts_folder, "processed-stats.json")))
 num_chunks = stats["chunks"]
-# index_info = json.load(open(paths.texts_folder + "index_infos.json"))
+# index_info = json.load(open(os.path.join(paths.texts_folder, "index_infos.json")))
 
 #%%
 
@@ -36,12 +37,12 @@ def faiss_read_index(path: str) -> Any:
 tt = time.time()
 print(f"loading embeddings from {paths.texts_folder}train.chunks.dat.embedded")
 embeddings = np.memmap(
-    paths.texts_folder + "train.chunks.dat.embedded", dtype=np.float32, mode="r", shape=(num_chunks, 768)
+    os.path.join(paths.texts_folder, "train.chunks.dat.embedded"), dtype=np.float32, mode="r", shape=(num_chunks, 768)
 )
 
 # embeddings = np.array(embeddings)
 print(f"loading index from {paths.texts_folder}knn.index")
-faiss_index = faiss_read_index(paths.texts_folder + "knn.index")
+faiss_index = faiss_read_index(os.path.join(paths.texts_folder, "knn.index"))
 
 delta = 0.1
 

@@ -7,6 +7,7 @@ seed_all(1111)
 import argparse
 import gc
 import time
+import os
 
 from omegaconf import OmegaConf
 
@@ -22,29 +23,18 @@ args = parser.parse_args()
 no_retrieve = args.no_retrieve
 config_name = args.config
 
+# # loading pathes
+print(f"Loading configs from {config_name} file")
+config = OmegaConf.load(config_name)
+paths = config.paths
+
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
 
-retro = RETRO(
-    max_seq_len=512,  # max sequence length
-    enc_dim=768,  # encoder model dimension
-    enc_depth=3,  # encoder depth
-    dec_dim=768,  # decoder model dimensions
-    dec_depth=12,  # decoder depth
-    dec_cross_attn_layers=(1, 3, 6, 9),  # decoder cross attention layers (with causal chunk cross attention)
-    heads=8,  # attention heads
-    dim_head=64,  # dimension per head
-    dec_attn_dropout=0.25,  # decoder attention dropout
-    dec_ff_dropout=0.25,  # decoder feedforward dropout
-).cuda()
+retro = RETRO(**config.model_hyperparameters).cuda()
 
 #%%
 
-# # loading pathes
-print(f"Loading configs from {config_name} file")
-conf_load = OmegaConf.load(config_name)
-paths = conf_load.paths
-
-val_data_path = paths.data_folder + paths.val_data_file
+val_data_path = os.path.join(paths.data_folder, paths.val_data_file)
 
 gc.collect()
 torch.cuda.empty_cache()
@@ -55,11 +45,11 @@ wrapper_db = TrainingWrapper(
     chunk_size=64,  # chunk size (64 in paper)
     documents_path=paths.data_folder,  # path to folder of text
     data_file_paths=[],
-    chunks_memmap_path=paths.texts_folder + "train.chunks.dat",  # path to chunks
-    seqs_memmap_path=paths.texts_folder + "train.seq.dat",  # path to sequence data
+    chunks_memmap_path=os.path.join(paths.texts_folder, "train.chunks.dat"),  # path to chunks
+    seqs_memmap_path=os.path.join(paths.texts_folder, "train.seq.dat"),  # path to sequence data
     doc_ids_memmap_path=paths.texts_folder
     + "train.doc_ids.dat",  # path to document ids per chunk (used for filtering neighbors belonging to same document)
-    processed_stats_json_path=paths.texts_folder + "processed-stats.json",
+    processed_stats_json_path=os.path.join(paths.texts_folder + "processed-stats.json"),
     # max_chunks = n_chuncks,                        # maximum cap to chunks
     # max_seqs = n_chuncks//5,                            # maximum seqs
     knn_extra_neighbors=100,  # num extra neighbors to fetch

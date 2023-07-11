@@ -14,9 +14,6 @@ from transformers import AutoTokenizer, T5ForConditionalGeneration
 from retro_pytorch.utils import memmap, reset_folder_
 
 ### TODO I do not know how to pass config name here from the main script
-# def setup(config_name: str):
-#     global config
-#     config = OmegaConf.load(config_name)
 
 config = OmegaConf.load("config_dev.yaml")
 paths = config.paths
@@ -202,7 +199,7 @@ def text_folder_to_chunks_(
                 total_seqs += doc_seq_len
                 total_docs += 1
 
-    return dict(chunks=total_chunks, docs=total_docs, seqs=total_seqs)
+    return dict(chunks=total_chunks, docs=total_docs, seqs=total_seqs, chunk_size=chunk_size)
 
 
 # embedding function
@@ -293,7 +290,7 @@ def memmap_file_to_chunks_(memmap_path, *, folder, shape, dtype, max_rows_per_fi
     print("\n ----- saving FINISHED ----- \n")
 
 
-def build_compound_index(data, index_file: str, params: dict[Any, Any], d: int) -> Any:
+def build_compound_index(data, index_file: str, index_params: dict[Any, Any], d: int) -> Any:
     # m - number of NN edges in a graph HNSW
     # d - vectors dimension
     # efCons - efConstruction controls the size of the dynamic list for the nearest neighbors during the construction of the HNSW index.
@@ -301,10 +298,10 @@ def build_compound_index(data, index_file: str, params: dict[Any, Any], d: int) 
     # In other words, it's a speed/accuracy trade-off during the index building phase.
     # efSearch - number of inspecting NNs during search time
 
-    index = faiss.IndexHNSWFlat(d, params.m)
-    index.hnsw.efConstruction = params.efCons
-    index.hnsw.efSearch = params.efSearch
-    index.verbose = params.verbose
+    index = faiss.IndexHNSWFlat(d, index_params.m)
+    index.hnsw.efConstruction = index_params.efCons
+    index.hnsw.efSearch = index_params.efSearch
+    index.verbose = index_params.verbose
 
     print("Training index")
     index.train(data)
@@ -322,19 +319,18 @@ def index_embeddings(
     index_folder,
     index_file="knn.index",
     num_chunks,
+    index_params,
 ):
 
-    global MODEL_DIM, config
+    global MODEL_DIM
     # embeddings_path = TMP_PATH / embeddings_folder
     index_path = index_folder / index_file
-
-    hnsw_params = config.retrieve.hnsw_params
 
     reset_folder_(INDEX_FOLDER_PATH)
 
     embeddings = np.memmap(str(embedding_path), dtype=np.float32, mode="r", shape=(num_chunks, MODEL_DIM))
 
-    index = build_compound_index(embeddings, str(index_path), hnsw_params, d=MODEL_DIM)
+    index = build_compound_index(embeddings, str(index_path), index_params, d=MODEL_DIM)
 
     return index
 
@@ -344,6 +340,7 @@ def chunks_to_index_and_embed(
     num_chunks,
     chunk_size,
     chunk_memmap_path,
+    index_params,
     use_cls_repr=False,
     max_rows_per_file=500,
     chunks_to_embeddings_batch_size=256,
@@ -389,6 +386,7 @@ def chunks_to_index_and_embed(
             index_folder=index_folder,
             index_file=index_file,
             num_chunks=num_chunks,
+            index_params=index_params,
             # **index_kwargs,
         )
 
@@ -403,6 +401,7 @@ def chunks_to_precalculated_knn_(
     chunk_size,
     chunk_memmap_path,
     doc_ids_memmap_path,
+    index_params,
     use_cls_repr=False,
     max_rows_per_file=500,
     chunks_to_embeddings_batch_size=256,
@@ -433,6 +432,7 @@ def chunks_to_precalculated_knn_(
         chunk_memmap_path=chunk_memmap_path,
         index_folder=chunk_path.parents[0],
         index_file=index_file,
+        index_params=index_params,
         **index_kwargs,
     )
 

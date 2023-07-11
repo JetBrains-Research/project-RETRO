@@ -166,6 +166,7 @@ class TrainingWrapper(nn.Module):
         processed_stats_json_path="./processed-stats.json",
         faiss_index_filename="knn.index",
         precalculate_knn=False,
+        index_params,
         **index_kwargs,
     ):
         super().__init__()
@@ -224,6 +225,7 @@ class TrainingWrapper(nn.Module):
             chunk_size=chunk_size,
             chunk_memmap_path=chunks_memmap_path,
             doc_ids_memmap_path=doc_ids_memmap_path,
+            index_params=index_params,
             num_nearest_neighbors=knn,
             num_extra_neighbors=knn_extra_neighbors,
             index_file=faiss_index_filename,
@@ -343,7 +345,7 @@ class TrainingWrapper(nn.Module):
     def generate_pure_random_chunk(self, seq, doc_except=None):
 
         """
-        generates pure random швы sequence as a chunk
+        generates pure random sequence as a chunk
         """
 
         batch_size = seq.size(0)

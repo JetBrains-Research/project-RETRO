@@ -4,6 +4,7 @@ seed_all(1111)
 import argparse
 import gc
 import time
+import os
 
 import torch
 from omegaconf import OmegaConf
@@ -17,8 +18,8 @@ args = parser.parse_args()
 config_name = args.config
 
 print(f"Loading configs from {config_name} file")
-conf_load = OmegaConf.load(config_name)
-paths = conf_load.paths
+config = OmegaConf.load(config_name)
+paths = config.paths
 
 
 """
@@ -36,23 +37,7 @@ torch.cuda.empty_cache()
 
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
 
-retro = RETRO(
-    max_seq_len=512,  # max sequence length
-    enc_dim=768,  # encoder model dimension
-    enc_depth=3,  # encoder depth
-    dec_dim=768,  # decoder model dimensions
-    dec_depth=12,  # decoder depth
-    dec_cross_attn_layers=(
-        1,
-        3,
-        6,
-        9,
-    ),  # decoder cross attention layers (with causal chunk cross attention)
-    heads=8,  # attention heads
-    dim_head=64,  # dimension per head
-    dec_attn_dropout=0.25,  # decoder attention dropout
-    dec_ff_dropout=0.25,  # decoder feedforward dropout
-).cuda()
+retro = RETRO(**config.model_hyperparameters).cuda()
 
 tt = time.time()
 
@@ -63,20 +48,17 @@ wrapper = TrainingWrapper(
     documents_path=paths.data_folder,  # path to folder of text
     # glob = '**/*.txt',                             # text glob
     data_file_paths=[
-        paths.data_folder + "val.jsonl",
-        # paths.data_folder + "test.jsonl",
-        # paths.data_folder + "train.jsonl",
+        os.path.join(paths.data_folder, "val.jsonl"),
+        # os.path.join(paths.data_folder, "test.jsonl"),
+        # os.path.join(paths.data_folder, "train.jsonl"),
     ],
-    chunks_memmap_path=texts_folder + "train.chunks.dat",  # path to chunks
-    seqs_memmap_path=texts_folder + "train.seq.dat",  # path to sequence data
-    doc_ids_memmap_path=texts_folder
-    + "train.doc_ids.dat",  # path to document ids per chunk (used for filtering neighbors belonging to same document)
-    processed_stats_json_path=texts_folder + "processed-stats.json",
+    chunks_memmap_path=os.path.join(texts_folder, "train.chunks.dat"),  # path to chunks
+    seqs_memmap_path=os.path.join(texts_folder, "train.seq.dat"),  # path to sequence data
+    doc_ids_memmap_path=os.path.join(texts_folder, "train.doc_ids.dat"),  # path to document ids per chunk (used for filtering neighbors belonging to same document)
+    processed_stats_json_path=os.path.join(texts_folder, "processed-stats.json"),
     max_chunks=n_chuncks,  # maximum cap to chunks
     max_seqs=n_chuncks // 5,  # maximum seqs
     knn_extra_neighbors=100,  # num extra neighbors to fetch
-    max_index_memory_usage="40G",
-    current_memory_available="64G",
 )
 
 time_used = time.time() - tt

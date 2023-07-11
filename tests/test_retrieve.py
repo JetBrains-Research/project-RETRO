@@ -5,8 +5,8 @@ import pandas as pd
 import torch
 from einops import rearrange
 from omegaconf import OmegaConf
-from tqdm import tqdm
 from transformers import AutoTokenizer
+import os
 
 from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
 from retro_pytorch.retrieval import embed
@@ -21,11 +21,11 @@ args = parser.parse_args()
 config_name = args.config
 
 print(f"Loading configs from {config_name} file")
-conf_load = OmegaConf.load(config_name)
-paths = conf_load.paths
+config = OmegaConf.load(config_name)
+paths = config.paths
 
-tain_data_path = paths.data_folder + paths.train_data_file
-val_data_path = paths.data_folder + paths.val_data_file
+train_data_path = os.path.join(paths.data_folder, paths.train_data_file)
+val_data_path = os.path.join(paths.data_folder, paths.val_data_file)
 
 tokenizer = AutoTokenizer.from_pretrained(paths.encoder_path)
 
@@ -35,23 +35,7 @@ Creates embeddings and finding knns for each chuncks in dataset
 
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
 
-retro = RETRO(
-    max_seq_len=512,  # max sequence length
-    enc_dim=768,  # encoder model dimension 896
-    enc_depth=3,  # encoder depth
-    dec_dim=768,  # decoder model dimensions
-    dec_depth=12,  # decoder depth
-    dec_cross_attn_layers=(
-        1,
-        3,
-        6,
-        9,
-    ),  # decoder cross attention layers (with causal chunk cross attention)
-    heads=8,  # attention heads
-    dim_head=64,  # dimension per head
-    dec_attn_dropout=0.25,  # decoder attention dropout
-    dec_ff_dropout=0.25,  # decoder feedforward dropout
-).cuda()
+retro = RETRO(**config.model_hyperparameters).cuda()
 
 # %%
 
@@ -61,11 +45,11 @@ wrapper_db = TrainingWrapper(
     chunk_size=64,  # chunk size (64 in paper)
     documents_path=paths.data_folder,  # path to folder of text
     data_file_paths=[],
-    chunks_memmap_path=paths.texts_folder + "train.chunks.dat",  # path to chunks
-    seqs_memmap_path=paths.texts_folder + "train.seq.dat",  # path to sequence data
+    chunks_memmap_path=os.path.join(paths.texts_folder, "train.chunks.dat"),  # path to chunks
+    seqs_memmap_path=os.path.join(paths.texts_folder, "train.seq.dat"),  # path to sequence data
     doc_ids_memmap_path=paths.texts_folder
     + "train.doc_ids.dat",  # path to document ids per chunk (used for filtering neighbors belonging to same document)
-    processed_stats_json_path=paths.texts_folder + "processed-stats.json",
+    processed_stats_json_path=os.path.join(paths.texts_folder, "processed-stats.json"),
     # max_chunks = n_chuncks,                        # maximum cap to chunks
     # max_seqs = n_chuncks//5,                            # maximum seqs
     knn_extra_neighbors=100,  # num extra neighbors to fetch
@@ -156,6 +140,6 @@ data_dict = {
 }
 retrieve_examples = pd.DataFrame(data_dict)
 
-retrieve_examples.to_csv(paths.out_folder + "retrieved_examples.csv")
+retrieve_examples.to_csv(os.path.join(paths.out_folder, "retrieved_examples.csv"))
 
 distances[distances != 0].mean()

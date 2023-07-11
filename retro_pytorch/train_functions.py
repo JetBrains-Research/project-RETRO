@@ -3,8 +3,6 @@ from typing import Any, Callable, Iterator, TextIO
 import torch
 from tqdm import tqdm
 
-from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
-
 
 def calc_loss(
     seq: torch.Tensor,
@@ -20,7 +18,8 @@ def calc_loss(
         retrieved = None
 
     loss = model(seq.cuda(), retrieved=retrieved, return_loss=True)
-    loss.backward()
+    if loss.requires_grad:
+        loss.backward()
 
     return loss
 
@@ -61,16 +60,16 @@ def val_steps(
     aggregate: list[tuple[torch.Tensor, torch.Tensor]],
 ) -> list[float]:
     model.eval()
-    print("------ Validation ------")
     losses_val_cur = []
-    for seq, docs in tqdm(aggregate, ncols=80):
-        loss = calc_loss(seq, docs, model, no_retrieve, fetch_neighbours)
-        losses_val_cur.append(loss.item())
+    with torch.no_grad():
+        for seq, docs in tqdm(aggregate, ncols=100):
+            loss = calc_loss(seq, docs, model, no_retrieve, fetch_neighbours)
+            losses_val_cur.append(loss.item())
 
     return losses_val_cur
 
 
-def val_upadate(
+def val_update(
     model: Any,
     losses_val: list[list[float]],
     losses_val_cur: list[list[float]],

@@ -4,6 +4,7 @@ seed_all(1111)
 
 import argparse
 import json
+import os
 
 import numpy as np
 import torch
@@ -28,16 +29,16 @@ print(f"Loading configs from {config_name} file")
 conf_load = OmegaConf.load(config_name)
 paths = conf_load.paths
 
-stats = json.load(open(paths.texts_folder + "processed-stats.json"))
+stats = json.load(open(os.path.join(paths.texts_folder, "processed-stats.json")))
 num_chunks = stats["chunks"]
 
 #%%
 
 embeddings = np.memmap(
-    paths.texts_folder + "train.chunks.dat.embedded", dtype=np.float32, mode="r", shape=(num_chunks, 768)
+    os.path.join(paths.texts_folder, "train.chunks.dat.embedded"), dtype=np.float32, mode="r", shape=(num_chunks, 768)
 )
 
-chunks = np.memmap(paths.texts_folder + "train.chunks.dat", dtype=np.int32, mode="r", shape=(num_chunks, 65))
+chunks = np.memmap(os.path.join(paths.texts_folder, "train.chunks.dat"), dtype=np.int32, mode="r", shape=(num_chunks, 65))
 
 #%%
 

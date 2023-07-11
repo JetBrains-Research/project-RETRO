@@ -5,6 +5,7 @@ seed_all(1111)
 import argparse
 import json
 from typing import Any
+import os
 
 import faiss
 import numpy as np
@@ -33,7 +34,7 @@ conf_load = OmegaConf.load(config_name)
 paths = conf_load.paths
 
 tokenizer = AutoTokenizer.from_pretrained(paths.encoder_path)
-stats = json.load(open(paths.texts_folder + "processed-stats.json"))
+stats = json.load(open(os.path.join(paths.texts_folder, "processed-stats.json")))
 num_chunks = stats["chunks"]
 chunk_size = 64
 
@@ -59,15 +60,15 @@ def faiss_read_index(path: str) -> Any:
 # %%
 
 embeddings = np.memmap(
-    paths.texts_folder + "train.chunks.dat.embedded", dtype=np.float32, mode="r", shape=(num_chunks, 768)
+    os.path.join(paths.texts_folder, "train.chunks.dat.embedded"), dtype=np.float32, mode="r", shape=(num_chunks, 768)
 )
 
-chunks = np.memmap(paths.texts_folder + "train.chunks.dat", dtype=np.int32, mode="r", shape=(num_chunks, 65))
+chunks = np.memmap(os.path.join(paths.texts_folder, "train.chunks.dat"), dtype=np.int32, mode="r", shape=(num_chunks, 65))
 
 # %%
 
 batch_size = 100
-val_data_path = paths.data_folder + paths.val_data_file
+val_data_path = os.path.join(paths.data_folder, paths.val_data_file)
 val_ds = DatasetJsonl(val_data_path, cnunk_size=64, seq_length=512, pad_id=0)
 val_dl = iter(DataLoaderFromFile(val_ds, batch_size=batch_size))
 
@@ -106,7 +107,7 @@ targ_emb = torch.tensor(embeddings[:start])
 
 print(f"Mean distance = {sum(distances) / len(distances)}")
 # %%
-faiss_index = faiss_read_index(paths.texts_folder + "knn.index")
+faiss_index = faiss_read_index(os.path.join(paths.texts_folder, "knn.index"))
 dist_db, indices_res_db = faiss_index.search(targ_emb, k=1)
 dist, indices_res = faiss_index.search(emb_calculated, k=1)
 
