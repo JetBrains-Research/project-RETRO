@@ -45,24 +45,18 @@ retro = RETRO(**config.model_hyperparameters).cuda()
 
 # %%
 
-wrapper = TrainingWrapper(
+wrapper_db = TrainingWrapper(
     retro=retro,  # path to retro instance
     knn=retrieve_hyperparams.n_knn,  # knn (2 in paper was sufficient)
     chunk_size=stats["chunk_size"],  # chunk size (64 in paper)
     documents_path=paths.data_folder,  # path to folder of text
-    data_file_paths=[
-        os.path.join(paths.data_folder, "val.jsonl"),
-        # os.path.join(paths.data_folder, "test.jsonl"),
-        # os.path.join(paths.data_folder, "train.jsonl"),
-    ],
-    chunks_memmap_path=os.path.join(texts_folder, "train.chunks.dat"),  # path to chunks
-    seqs_memmap_path=os.path.join(texts_folder, "train.seq.dat"),  # path to sequence data
+    data_file_paths=[],
+    chunks_memmap_path=os.path.join(paths.texts_folder, "train.chunks.dat"),  # path to chunks
+    seqs_memmap_path=os.path.join(paths.texts_folder, "train.seq.dat"),  # path to sequence data
     doc_ids_memmap_path=os.path.join(
-        texts_folder, "train.doc_ids.dat"
+        paths.texts_folder, "train.doc_ids.dat"
     ),  # path to document ids per chunk (used for filtering neighbors belonging to same document)
     processed_stats_json_path=stats_path,
-    max_chunks=n_chuncks,  # maximum cap to chunks
-    max_seqs=n_chuncks // 5,  # maximum seqs
     knn_extra_neighbors=retrieve_hyperparams.knn_extra_neighbors,  # num extra neighbors to fetch
     precalculate_knn=False,
     index_params=index_params,

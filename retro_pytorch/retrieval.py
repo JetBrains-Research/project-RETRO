@@ -20,6 +20,7 @@ paths = config.paths
 
 # helper functions
 
+
 def exists(val):
     return val is not None
 
