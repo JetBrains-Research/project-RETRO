@@ -15,7 +15,7 @@ from retro_pytorch.utils import memmap, reset_folder_
 
 ### TODO I do not know how to pass config name here from the main script
 
-config = OmegaConf.load("config_dev.yaml")
+config = OmegaConf.load("config.yaml")
 paths = config.paths
 
 # helper functions
