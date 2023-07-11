@@ -38,7 +38,9 @@ embeddings = np.memmap(
     os.path.join(paths.texts_folder, "train.chunks.dat.embedded"), dtype=np.float32, mode="r", shape=(num_chunks, 768)
 )
 
-chunks = np.memmap(os.path.join(paths.texts_folder, "train.chunks.dat"), dtype=np.int32, mode="r", shape=(num_chunks, 65))
+chunks = np.memmap(
+    os.path.join(paths.texts_folder, "train.chunks.dat"), dtype=np.int32, mode="r", shape=(num_chunks, 65)
+)
 
 #%%
 

@@ -1,12 +1,12 @@
 import argparse
 import json
+import os
 import time
 from typing import Any
 
 import faiss
 import numpy as np
 from omegaconf import OmegaConf
-import os
 
 # %%
 

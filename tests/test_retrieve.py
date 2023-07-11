@@ -1,4 +1,6 @@
 import argparse
+import json
+import os
 from typing import Any
 
 import pandas as pd
@@ -6,7 +8,6 @@ import torch
 from einops import rearrange
 from omegaconf import OmegaConf
 from transformers import AutoTokenizer
-import os
 
 from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
 from retro_pytorch.retrieval import embed
@@ -26,6 +27,11 @@ paths = config.paths
 
 train_data_path = os.path.join(paths.data_folder, paths.train_data_file)
 val_data_path = os.path.join(paths.data_folder, paths.val_data_file)
+retrieve_hyperparams = config.retrieve.hyperparams
+index_params = config.retrieve.hnsw_params
+stats_path = os.path.join(paths.texts_folder, "processed-stats.json")
+with open(stats_path, "r") as f:
+    stats = json.load(f)
 
 tokenizer = AutoTokenizer.from_pretrained(paths.encoder_path)
 
@@ -39,22 +45,27 @@ retro = RETRO(**config.model_hyperparameters).cuda()
 
 # %%
 
-wrapper_db = TrainingWrapper(
+wrapper = TrainingWrapper(
     retro=retro,  # path to retro instance
-    knn=2,  # knn (2 in paper was sufficient)
-    chunk_size=64,  # chunk size (64 in paper)
+    knn=retrieve_hyperparams.n_knn,  # knn (2 in paper was sufficient)
+    chunk_size=stats["chunk_size"],  # chunk size (64 in paper)
     documents_path=paths.data_folder,  # path to folder of text
-    data_file_paths=[],
-    chunks_memmap_path=os.path.join(paths.texts_folder, "train.chunks.dat"),  # path to chunks
-    seqs_memmap_path=os.path.join(paths.texts_folder, "train.seq.dat"),  # path to sequence data
-    doc_ids_memmap_path=paths.texts_folder
-    + "train.doc_ids.dat",  # path to document ids per chunk (used for filtering neighbors belonging to same document)
-    processed_stats_json_path=os.path.join(paths.texts_folder, "processed-stats.json"),
-    # max_chunks = n_chuncks,                        # maximum cap to chunks
-    # max_seqs = n_chuncks//5,                            # maximum seqs
-    knn_extra_neighbors=100,  # num extra neighbors to fetch
-    max_index_memory_usage="10G",
-    current_memory_available="32G",
+    data_file_paths=[
+        os.path.join(paths.data_folder, "val.jsonl"),
+        # os.path.join(paths.data_folder, "test.jsonl"),
+        # os.path.join(paths.data_folder, "train.jsonl"),
+    ],
+    chunks_memmap_path=os.path.join(texts_folder, "train.chunks.dat"),  # path to chunks
+    seqs_memmap_path=os.path.join(texts_folder, "train.seq.dat"),  # path to sequence data
+    doc_ids_memmap_path=os.path.join(
+        texts_folder, "train.doc_ids.dat"
+    ),  # path to document ids per chunk (used for filtering neighbors belonging to same document)
+    processed_stats_json_path=stats_path,
+    max_chunks=n_chuncks,  # maximum cap to chunks
+    max_seqs=n_chuncks // 5,  # maximum seqs
+    knn_extra_neighbors=retrieve_hyperparams.knn_extra_neighbors,  # num extra neighbors to fetch
+    precalculate_knn=False,
+    index_params=index_params,
 )
 
 # %%

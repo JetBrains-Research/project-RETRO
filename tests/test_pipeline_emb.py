@@ -4,8 +4,8 @@ seed_all(1111)
 
 import argparse
 import json
-from typing import Any
 import os
+from typing import Any
 
 import faiss
 import numpy as np
@@ -63,7 +63,9 @@ embeddings = np.memmap(
     os.path.join(paths.texts_folder, "train.chunks.dat.embedded"), dtype=np.float32, mode="r", shape=(num_chunks, 768)
 )
 
-chunks = np.memmap(os.path.join(paths.texts_folder, "train.chunks.dat"), dtype=np.int32, mode="r", shape=(num_chunks, 65))
+chunks = np.memmap(
+    os.path.join(paths.texts_folder, "train.chunks.dat"), dtype=np.int32, mode="r", shape=(num_chunks, 65)
+)
 
 # %%
 
@@ -109,9 +111,9 @@ print(f"Mean distance = {sum(distances) / len(distances)}")
 # %%
 faiss_index = faiss_read_index(os.path.join(paths.texts_folder, "knn.index"))
 dist_db, indices_res_db = faiss_index.search(targ_emb, k=1)
-dist, indices_res = faiss_index.search(emb_calculated, k=1)
+distances, indices_res = faiss_index.search(emb_calculated, k=1)
 
-print(f"Error rate original = {sum(dist[:, 0] > 1e-6) / len(dist)}")
+print(f"Error rate original = {sum(distances[:, 0] > 1e-6) / len(distances)}")
 print(f"Error rate = {sum(dist_db[:, 0] > 1e-6) / len(dist_db)}")
 
 # %%

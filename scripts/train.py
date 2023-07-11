@@ -2,13 +2,13 @@ from retro_pytorch.utils import seed_all
 
 seed_all(1111)
 import argparse
+import json
+import os
 import time
 from datetime import datetime
-import os
 
 from omegaconf import OmegaConf
 from tqdm import tqdm
-import json
 
 from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
 from retro_pytorch.retro_pytorch import RETRO
@@ -41,7 +41,7 @@ config = OmegaConf.load(config_name)
 paths = config.paths
 training_params = config.training_params
 retrieve_hyperparams = config.retrieve.hyperparams
-index_params=config.retrieve.hnsw_params
+index_params = config.retrieve.hnsw_params
 
 model_name = paths.model_name + add_flag
 
@@ -52,21 +52,28 @@ filename_val = os.path.join(paths.out_folder, paths.out_filename_val + add_flag 
 stats_path = os.path.join(paths.texts_folder, "processed-stats.json")
 f_train = open(filename_train, "a")
 f_val = open(filename_val, "a")
-with open(stats_path, 'r') as f:
+with open(stats_path, "r") as f:
     stats = json.load(f)
 
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
 retro = RETRO(**config.model_hyperparameters).cuda()
 
+if no_retrieve:
+    print("Freezing encoder parameters")
+    for param in retro.encoder.parameters():
+        param.requires_grad = False
+
 wrapper_db = TrainingWrapper(
     retro=retro,  # path to retro instance
     knn=retrieve_hyperparams.n_knn,  # knn (2 in paper was sufficient)
-    chunk_size=stats['chunk_size'],  # chunk size (64 in paper)
+    chunk_size=stats["chunk_size"],  # chunk size (64 in paper)
     documents_path=paths.data_folder,  # path to folder of text
     data_file_paths=[],
     chunks_memmap_path=os.path.join(paths.texts_folder, "train.chunks.dat"),  # path to chunks
     seqs_memmap_path=os.path.join(paths.texts_folder, "train.seq.dat"),  # path to sequence data
-    doc_ids_memmap_path=os.path.join(paths.texts_folder, "train.doc_ids.dat"),  # path to document ids per chunk (used for filtering neighbors belonging to same document)
+    doc_ids_memmap_path=os.path.join(
+        paths.texts_folder, "train.doc_ids.dat"
+    ),  # path to document ids per chunk (used for filtering neighbors belonging to same document)
     processed_stats_json_path=stats_path,
     knn_extra_neighbors=retrieve_hyperparams.knn_extra_neighbors,  # num extra neighbors to fetch
     precalculate_knn=False,
@@ -76,8 +83,8 @@ wrapper_db = TrainingWrapper(
 # %%
 
 ### setting up number of steps.
-freq_val = training_params.freq_val # frequency of validation
-num_val = training_params.num_val # number of validation steps
+freq_val = training_params.freq_val  # frequency of validation
+num_val = training_params.num_val  # number of validation steps
 batch_size = training_params.batch_size
 batch_size_val = training_params.batch_size_val
 batch_accumulation = training_params.batch_accumulation
@@ -89,7 +96,7 @@ accumulate_steps = accumulate_steps = (
 batch_accumulation = accumulate_steps * batch_size
 total_steps = total_items // batch_accumulation
 warmup_steps = total_steps // 25  ### 4% for warmup
-lr = training_params.lr # learning rate
+lr = training_params.lr  # learning rate
 
 ### Ensure that validation is performed after taking the gradient step.
 freq_val = (freq_val // accumulate_steps) * accumulate_steps
@@ -145,11 +152,18 @@ for train_steps, (seq, docs) in enumerate(tqdm(train_dl, total=total_items // ba
         losses_val_rnd_cur = val_steps(retro, no_retrieve, fetch_random_chunk, aggregate)
         losses_val_pure_rnd_cur = val_steps(retro, no_retrieve, generate_pure_random_chunk, aggregate)
 
-        max_val_loss, saved_ind, saved_last_ind, val_dl_iter = val_update(retro, losses_val,
-                                                                          [losses_val_cur, losses_val_rnd_cur,
-                                                                           losses_val_pure_rnd_cur], paths.model_folder,
-                                                                          model_name, val_dl_iter, f_val, max_val_loss,
-                                                                          saved_ind, saved_last_ind)
+        max_val_loss, saved_ind, saved_last_ind, val_dl_iter = val_update(
+            retro,
+            losses_val,
+            [losses_val_cur, losses_val_rnd_cur, losses_val_pure_rnd_cur],
+            paths.model_folder,
+            model_name,
+            val_dl_iter,
+            f_val,
+            max_val_loss,
+            saved_ind,
+            saved_last_ind,
+        )
 
         if val_step < num_val:
             print("----- Reloading val dataset ------")

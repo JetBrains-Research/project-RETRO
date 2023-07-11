@@ -37,7 +37,9 @@ chunk_size = 64
 
 #%%
 
-chunks = np.memmap(os.path.join(paths.texts_folder, "train.chunks.dat"), dtype=np.int32, mode="r", shape=(num_chunks, 65))
+chunks = np.memmap(
+    os.path.join(paths.texts_folder, "train.chunks.dat"), dtype=np.int32, mode="r", shape=(num_chunks, 65)
+)
 
 batch_size = 10000
 val_data_path = os.path.join(paths.data_folder, paths.val_data_file)
