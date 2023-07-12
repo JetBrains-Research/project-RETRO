@@ -149,8 +149,12 @@ for train_steps, (seq, docs) in enumerate(tqdm(train_dl, total=total_items // ba
         aggregate, val_step = aggregate_batches(val_dl_iter, num_val)
         # losses_val_cur, val_step = val_steps(retro, no_retrieve, fetch_neighbours, num_val, val_dl_iter)
         losses_val_cur = val_steps(retro, no_retrieve, fetch_neighbours, aggregate)
-        losses_val_rnd_cur = val_steps(retro, no_retrieve, fetch_random_chunk, aggregate)
-        losses_val_pure_rnd_cur = val_steps(retro, no_retrieve, generate_pure_random_chunk, aggregate)
+        if not no_retrieve:
+            losses_val_rnd_cur = val_steps(retro, no_retrieve, fetch_random_chunk, aggregate)
+            losses_val_pure_rnd_cur = val_steps(retro, no_retrieve, generate_pure_random_chunk, aggregate)
+        else:
+            losses_val_rnd_cur = losses_val_cur
+            losses_val_pure_rnd_cur = losses_val_cur
 
         max_val_loss, saved_ind, saved_last_ind, val_dl_iter = val_update(
             retro,
