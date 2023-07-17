@@ -15,8 +15,9 @@ from retro_pytorch.retrieval import (
     EOS_ID,
     PAD_TOKEN,
     SOS_ID,
-    bert_embed,
+    VOCAB_SIZE,
     chunks_to_precalculated_knn_,
+    embed,
     text_folder_to_chunks_,
 )
 from retro_pytorch.retro_pytorch import RETRO
@@ -83,7 +84,7 @@ def top_p(logits, thres=0.9):
     return sorted_logits.scatter(1, sorted_indices, sorted_logits)
 
 
-def aware(text=""):
+def aware(text: str = "") -> None:
     pass
     # response = input(f"To {text} press any key: ")
     # if response.lower() == "y" or response.lower() == "yes":
@@ -112,7 +113,6 @@ def knn_chunks_from_seq_chunks(
     chunks_memmap_path,
     doc_except=None,
     pad_with_os=True,
-    isdecoder=False,
 ):
     b, device = seq_chunks.shape[0], seq_chunks.device
 
@@ -125,7 +125,7 @@ def knn_chunks_from_seq_chunks(
         seq_chunks = torch.cat((sos, seq_chunks, eos), dim=1)
 
     # embed with frozen MODEL
-    embeds = bert_embed(seq_chunks.cpu(), isdecoder=isdecoder)  # fetch embeds on CPU for now # seq_chunks.cpu()
+    embeds = embed(seq_chunks.cpu())  # fetch embeds on CPU for now # seq_chunks.cpu()
 
     # retrieval of knn with faiss
 
@@ -165,6 +165,8 @@ class TrainingWrapper(nn.Module):
         knn_extra_neighbors=100,
         processed_stats_json_path="./processed-stats.json",
         faiss_index_filename="knn.index",
+        precalculate_knn=False,
+        index_params,
         **index_kwargs,
     ):
         super().__init__()
@@ -208,8 +210,12 @@ class TrainingWrapper(nn.Module):
         num_seqs = self.stats["seqs"]
         self.knn_extra_neighbors = knn_extra_neighbors
         self.knn = knn
+        self.seq_len = retro.seq_len
         self.doc_ids_memmap_path = doc_ids_memmap_path
         self.chunks_memmap_path = chunks_memmap_path
+        self.all_chunks = np.memmap(
+            chunks_memmap_path, dtype=np.int32, mode="r", shape=(self.num_chunks, chunk_size + 1)
+        )
 
         # calculate knn memmap path and get the faiss index
         # todo - make sure if faiss_index_filename is found, do not reprocess unless flag is given
@@ -219,10 +225,12 @@ class TrainingWrapper(nn.Module):
             chunk_size=chunk_size,
             chunk_memmap_path=chunks_memmap_path,
             doc_ids_memmap_path=doc_ids_memmap_path,
+            index_params=index_params,
             num_nearest_neighbors=knn,
             num_extra_neighbors=knn_extra_neighbors,
             index_file=faiss_index_filename,
             force_reprocess=force_reprocess,
+            precalculate_knn=precalculate_knn,
             **index_kwargs,
         )
 
@@ -264,7 +272,7 @@ class TrainingWrapper(nn.Module):
             pad_with_os=False,
         )
 
-    def fetch_neighbours(self, seq, doc_except):
+    def fetch_neighbours(self, seq: torch.Tensor, doc_except: torch.Tensor) -> torch.Tensor:
         # global neighbor_doc_ids, neighbor_from_same_doc, distances
 
         b, seq_len = seq.shape
@@ -280,7 +288,6 @@ class TrainingWrapper(nn.Module):
             past_seq_chunks,
             doc_except=doc_except,
             knn=total_neighbors_to_fetch,
-            isdecoder=True,
         )
 
         with memmap(
@@ -320,6 +327,31 @@ class TrainingWrapper(nn.Module):
             knn_chunks_torch = rearrange(knn_chunks_torch, "(b n) k c -> b n k c", b=b)
 
             return knn_chunks_torch
+
+    def fetch_random_chunk(self, seq, doc_except=None):
+
+        """
+        fetches random chunk from database
+        """
+
+        batch_size = seq.size(0)
+        seq_size = self.seq_len // self.chunk_size
+        n_samples = seq_size * batch_size * self.knn
+        start_indices = np.random.choice(self.all_chunks.shape[0] - 1, size=n_samples, replace=False)
+        selected_pairs = np.array([np.concatenate(self.all_chunks[i : i + 2, :-1]) for i in start_indices])
+        batch_shape = (batch_size, seq_size, self.knn, 2 * self.chunk_size)
+        return torch.tensor(selected_pairs.reshape(batch_shape)).cuda()
+
+    def generate_pure_random_chunk(self, seq, doc_except=None):
+
+        """
+        generates pure random sequence as a chunk
+        """
+
+        batch_size = seq.size(0)
+        seq_size = self.seq_len // self.chunk_size
+        batch_shape = (batch_size, seq_size, self.knn, 2 * self.chunk_size)
+        return torch.randint(0, VOCAB_SIZE, batch_shape).cuda()
 
     @torch.no_grad()
     @eval_decorator

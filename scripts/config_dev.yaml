@@ -1,0 +1,37 @@
+retrieve:
+  hnsw_params: {m: 8, efCons: 8, efSearch: 8, verbose: True}
+  hyperparams: {n_knn: 2, knn_extra_neighbors: 100} # n_knn - number of nearest members to retrieve during pipeline
+model_hyperparameters:
+  max_seq_len: 512  # max sequence length
+  enc_dim: 896  # encoder model dimension
+  enc_depth: 3  # encoder depth
+  dec_dim: 768  # decoder model dimensions
+  dec_depth: 12  # decoder depth
+  dec_cross_attn_layers: [1,3,6,9]  # decoder cross attention layers (with causal chunk cross attention)
+  heads: 8  # attention heads
+  dim_head: 64  # dimension per head
+  dec_attn_dropout: 0.25  # decoder attention dropout
+  dec_ff_dropout: 0.25  # decoder feedforward dropout
+training_params:
+  lr: 3e-4 # learning rate
+  freq_val: 10 # frequency of validation
+  num_val: 5 # number of validation steps
+  batch_size: 14
+  batch_size_val: 64 # batch size on validation steps
+  batch_accumulation: 64 # number of samples before optimization step
+paths:
+  texts_folder: ../../data/texts_folder_dev/
+  data_folder: ../../data/full_dataset/
+  model_folder: ../../data/models/
+  encoder_path: ../../models/CodeT5p-220M/
+  out_folder: ../out_dir/
+  tmp_path: ./.tmp
+  index_folder: .index
+  embedding_tmp_subfolder: embeddings
+  model_name: retro_dev
+  train_data_file: train.jsonl
+  val_data_file: val.jsonl
+  out_filename_train: losses_train_dev
+  out_filename_val: losses_val_dev
+messages:
+  embedder_init: ---- Using CodeT5p-220M model for embedding----

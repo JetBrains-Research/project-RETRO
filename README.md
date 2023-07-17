@@ -247,28 +247,27 @@ This repository will use the default tokenizer (sentencepiece) for the cased ver
 ex. masked mean pooled representation
 
 ```python
-from retro_pytorch.retrieval import bert_embed, tokenize
+from retro_pytorch.retrieval import embed, tokenize
 
 ids = tokenize([
     'hello world',
     'foo bar'
 ])
 
-embeds = bert_embed(ids) # (2, 768) - 768 is hidden dimension of BERT
+embeds = embed(ids)  # (2, 768) - 768 is hidden dimension of BERT
 ```
 
 ex. CLS token representation
 
-
 ```python
-from retro_pytorch.retrieval import bert_embed, tokenize
+from retro_pytorch.retrieval import embed, tokenize
 
 ids = tokenize([
     'hello world',
     'foo bar'
 ])
 
-embeds = bert_embed(ids, return_cls_repr = True) # (2, 768)
+embeds = embed(ids, return_cls_repr=True)  # (2, 768)
 ```
 
 Create your chunks and chunk start indices (for calculating sequence ranges for autoregressive training) using `text_folder_to_chunks_`

@@ -1,0 +1,99 @@
+from typing import Any, Callable, Iterator, TextIO
+
+import torch
+from tqdm import tqdm
+
+
+def calc_loss(
+    seq: torch.Tensor,
+    docs: torch.Tensor,
+    model,
+    no_retrieve: bool,
+    fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+) -> Any:
+
+    if not no_retrieve:
+        retrieved = fetch_neighbours(seq.cuda(), doc_except=docs)
+    else:
+        retrieved = None
+
+    loss = model(seq.cuda(), retrieved=retrieved, return_loss=True)
+    if loss.requires_grad:
+        loss.backward()
+
+    return loss
+
+
+def grad_step(optimizer: Any, scheduler: Any, loss: Any, loss_train_list: list[float], out_file) -> None:
+    optimizer.step()
+    optimizer.zero_grad()
+    scheduler.step()
+    loss_train_list.append(loss.item())
+    out_file.write(str(loss.item()) + "\n")
+
+
+def save_model(prefix: str, model: Any, model_folder: str, model_name: str) -> None:
+    print(f"---- Saving the {prefix} model -----")
+    model_file_name = model_folder + f"{model_name}_{prefix}.pth"
+    torch.save(model.state_dict(), model_file_name)
+
+
+def aggregate_batches(
+    val_dl_iter: Iterator,
+    num_val: int,
+) -> tuple[list[tuple[torch.Tensor, torch.Tensor]], int]:
+    batch_aggregate = []
+    val_step = 0
+    for val_step, (seq, docs) in enumerate(val_dl_iter, start=1):
+        batch_aggregate.append((seq, docs))
+        if num_val is not None:
+            if val_step >= num_val:
+                break
+
+    return batch_aggregate, val_step
+
+
+def val_steps(
+    model: Any,
+    no_retrieve: bool,
+    fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    aggregate: list[tuple[torch.Tensor, torch.Tensor]],
+) -> list[float]:
+    model.eval()
+    losses_val_cur = []
+    with torch.no_grad():
+        for seq, docs in tqdm(aggregate, ncols=100):
+            loss = calc_loss(seq, docs, model, no_retrieve, fetch_neighbours)
+            losses_val_cur.append(loss.item())
+
+    return losses_val_cur
+
+
+def val_update(
+    model: Any,
+    losses_val: list[list[float]],
+    losses_val_cur: list[list[float]],
+    model_folder: str,
+    model_name: str,
+    val_dl_iter: Iterator,
+    f_val: TextIO,
+    max_val_loss: float,
+    saved_ind: int,
+    saved_last_ind: int,
+) -> tuple[float, int, int, Iterator]:
+
+    if len(losses_val_cur) != 0:
+        loss_cur = [sum(losses_cur) / (len(losses_cur)) for losses_cur in losses_val_cur]
+        losses_val.append(loss_cur)
+        f_val.write(str(loss_cur) + "\n")
+        f_val.flush()
+
+        save_model("last_" + str(saved_last_ind), model, model_folder, model_name)
+        saved_last_ind = (saved_last_ind + 1) % 3
+
+        if loss_cur[0] < max_val_loss:
+            max_val_loss = loss_cur[0]
+            save_model(f"best_{saved_ind}", model, model_folder, model_name)
+            saved_ind = (saved_ind + 1) % 3
+
+    return max_val_loss, saved_ind, saved_last_ind, val_dl_iter

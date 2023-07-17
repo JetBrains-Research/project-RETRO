@@ -1,75 +1,73 @@
+from retro_pytorch.utils import seed_all
+
+seed_all(1111)
+import argparse
 import gc
-import sys
+import json
+import os
 import time
 
 import torch
+from omegaconf import OmegaConf
 
 from retro_pytorch.retro_pytorch import RETRO
 from retro_pytorch.training import TrainingWrapper
+
+parser = argparse.ArgumentParser(description="")
+parser.add_argument("-config", "--config", default="config.yaml", help="Config filename")
+args = parser.parse_args()
+config_name = args.config
+
+print(f"Loading configs from {config_name} file")
+config = OmegaConf.load(config_name)
+paths = config.paths
+
 
 """
 Create your chunks and chunk start indices (for calculating sequence ranges for autoregressive training) using text_folder_to_chunks_
 Creates embeddings and finding knns for each chuncks in dataset
 """
 
-# for n_chuncks, split in zip([2_000_000, 2_000_000, 20_000_000], ['val', 'test', 'train']):
-# for n_chuncks, split in zip([20_000_000], ['train']):
-
 n_chuncks = 15_000_000
-# n_chuncks = 1_000_000
+# n_chuncks = 700_000
 
-# texts_folder = '../../data/texts_folder/'
-texts_folder = "../../data/texts_folder/"
-data_folder = "../../data/full_dataset/"
-# print('-------' + split + '-------')
+texts_folder = paths.texts_folder
+retrieve_hyperparams = config.retrieve.hyperparams
+index_params = config.retrieve.hnsw_params
+stats_path = os.path.join(paths.texts_folder, "processed-stats.json")
+with open(stats_path, "r") as f:
+    stats = json.load(f)
 
 gc.collect()
 torch.cuda.empty_cache()
 
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
 
-retro = RETRO(
-    max_seq_len=512,  # max sequence length
-    enc_dim=768,  # encoder model dimension
-    enc_depth=3,  # encoder depth
-    dec_dim=768,  # decoder model dimensions
-    dec_depth=12,  # decoder depth
-    dec_cross_attn_layers=(
-        1,
-        3,
-        6,
-        9,
-    ),  # decoder cross attention layers (with causal chunk cross attention)
-    heads=8,  # attention heads
-    dim_head=64,  # dimension per head
-    dec_attn_dropout=0.25,  # decoder attention dropout
-    dec_ff_dropout=0.25,  # decoder feedforward dropout
-).cuda()
+retro = RETRO(**config.model_hyperparameters).cuda()
 
 tt = time.time()
 
 wrapper = TrainingWrapper(
     retro=retro,  # path to retro instance
-    knn=2,  # knn (2 in paper was sufficient)
-    chunk_size=64,  # chunk size (64 in paper)
-    documents_path=data_folder,  # path to folder of text
-    # glob = '**/*.txt',                             # text glob
+    knn=retrieve_hyperparams.n_knn,  # knn (2 in paper was sufficient)
+    chunk_size=stats["chunk_size"],  # chunk size (64 in paper)
+    documents_path=paths.data_folder,  # path to folder of text
     data_file_paths=[
-        data_folder + "val.jsonl",
-        data_folder + "test.jsonl",
-        data_folder + "train.jsonl",
+        os.path.join(paths.data_folder, "val.jsonl"),
+        # os.path.join(paths.data_folder, "test.jsonl"),
+        # os.path.join(paths.data_folder, "train.jsonl"),
     ],
-    # data_file_paths = [data_folder + 'val.jsonl'],
-    chunks_memmap_path=texts_folder + "train.chunks.dat",  # path to chunks
-    seqs_memmap_path=texts_folder + "train.seq.dat",  # path to sequence data
-    doc_ids_memmap_path=texts_folder
-    + "train.doc_ids.dat",  # path to document ids per chunk (used for filtering neighbors belonging to same document)
-    processed_stats_json_path=texts_folder + "processed-stats.json",
+    chunks_memmap_path=os.path.join(texts_folder, "train.chunks.dat"),  # path to chunks
+    seqs_memmap_path=os.path.join(texts_folder, "train.seq.dat"),  # path to sequence data
+    doc_ids_memmap_path=os.path.join(
+        texts_folder, "train.doc_ids.dat"
+    ),  # path to document ids per chunk (used for filtering neighbors belonging to same document)
+    processed_stats_json_path=stats_path,
     max_chunks=n_chuncks,  # maximum cap to chunks
     max_seqs=n_chuncks // 5,  # maximum seqs
-    knn_extra_neighbors=100,  # num extra neighbors to fetch
-    max_index_memory_usage="40G",
-    current_memory_available="64G",
+    knn_extra_neighbors=retrieve_hyperparams.knn_extra_neighbors,  # num extra neighbors to fetch
+    precalculate_knn=False,
+    index_params=index_params,
 )
 
 time_used = time.time() - tt

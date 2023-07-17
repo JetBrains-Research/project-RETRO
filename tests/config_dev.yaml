@@ -1,0 +1,18 @@
+retrieve:
+  hnsw_params: {m: 8, efCons: 8, efSearch: 8, verbose: True}
+messages:
+  embedder_init: ---- Using CodeT5p-220M model for embedding----
+paths:
+  texts_folder: ../../data/texts_folder_dev/
+  data_folder: ../../data/full_dataset/
+  model_folder: ../../data/models/
+  encoder_path: ../../models/CodeT5p-220M/
+  out_folder: ../out_dir/
+  tmp_path: ./.tmp
+  index_folder: .index
+  embedding_tmp_subfolder: embeddings
+  model_name: retro_dev
+  train_data_file: train.jsonl
+  val_data_file: val.jsonl
+  out_filename_train: losses_train_dev
+  out_filename_val: losses_val_dev
