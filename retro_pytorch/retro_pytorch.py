@@ -660,7 +660,7 @@ class RETRO(nn.Module):
         loss = F.cross_entropy(rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id)
         return loss
 
-    def forward(self, seq, retrieved=None, return_loss=False):
+    def forward(self, seq, retrieved=None, retrieved_contrast=None, return_loss=False):
         """
         b - batch
         n - sequence length / chunk length
@@ -675,6 +675,11 @@ class RETRO(nn.Module):
         # assert not (return_loss and not self.training), 'must be training if returning loss'
 
         # assume padding token id (usually 0.) is to be masked out
+
+        if self.training and exists(retrieved_contrast):
+            batch_size = retrieved.size(0)
+            retrieved = torch.cat((retrieved, retrieved_contrast))
+            seq = torch.cat((seq, seq))
 
         mask = retrieved != self.pad_id
 
@@ -752,6 +757,26 @@ class RETRO(nn.Module):
             return logits
 
         # cross entropy loss
+        if self.training and exists(retrieved_contrast):
 
-        loss = F.cross_entropy(rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id)
-        return loss
+            # loss1 = F.cross_entropy(rearrange(logits[:batch_size], "b n c -> b c n"), labels[:batch_size], ignore_index=self.pad_id)
+            # loss2 = F.cross_entropy(rearrange(logits[batch_size:], "b n c -> b c n"), labels[batch_size:], ignore_index=self.pad_id)
+
+            losses = F.cross_entropy(
+                rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id, reduction="none"
+            )
+
+            loss1 = losses[:batch_size]
+            loss2 = losses[batch_size:]
+
+            mask = loss1 != 0
+            loss1 = loss1[mask].mean()
+
+            mask = loss2 != 0
+            loss2 = loss2[mask].mean()
+
+            margin = 2.0
+            return loss1 + torch.clamp(margin - (loss2 - loss1), min=0)
+        else:
+            loss = F.cross_entropy(rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id)
+            return loss

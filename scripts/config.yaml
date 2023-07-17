@@ -15,11 +15,12 @@ model_hyperparameters:
 training_params:
   lr: 3e-4 # learning rate
   freq_val: 1000 # frequency of validation
-  num_val: 50 # number of validation steps
-  batch_size: 14
-  batch_size_val: 64 # batch size on validation steps
+  num_val: 200 # number of validation steps
+  batch_size: 7
+  batch_size_val: 64 #64 # batch size on validation steps
   batch_accumulation: 64 # number of samples before optimization step
 paths:
+  #texts_folder: /mnt/data/galimzyanov/retrieval/texts_folder #../../data/texts_folder/
   texts_folder: ../../data/texts_folder/
   data_folder: ../../data/full_dataset/
   model_folder: ../../data/models/
