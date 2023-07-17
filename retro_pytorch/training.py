@@ -125,11 +125,11 @@ def knn_chunks_from_seq_chunks(
         seq_chunks = torch.cat((sos, seq_chunks, eos), dim=1)
 
     # embed with frozen MODEL
-    embeds = embed(seq_chunks.cpu())  # fetch embeds on CPU for now # seq_chunks.cpu()
+    embeds = embed(seq_chunks).cpu().numpy()  # fetch embeds on CPU for now # seq_chunks.cpu()
 
     # retrieval of knn with faiss
 
-    distances, knn_indices = faiss_index.search(embeds.cpu().numpy(), k=knn)
+    distances, knn_indices = faiss_index.search(embeds, k=knn)
 
     # numpy to torch
 
@@ -280,7 +280,7 @@ class TrainingWrapper(nn.Module):
         ### chunks, that have only PAD_TOKEN are marked, so that retrieve results to be put to PAD_TOKEN too.
         zero_ind = torch.all(past_seq_chunks == PAD_TOKEN, dim=-1)
 
-        sos = SOS_ID * torch.ones((past_seq_chunks.shape[0], 1), dtype=torch.bool, device=seq.device)
+        sos = SOS_ID * torch.ones((past_seq_chunks.shape[0], 1), dtype=torch.bool, device=seq.device)## TODO dtype=torch.bool
         past_seq_chunks = torch.cat((sos, past_seq_chunks), dim=1)
 
         total_neighbors_to_fetch = self.knn_extra_neighbors + self.knn + 1

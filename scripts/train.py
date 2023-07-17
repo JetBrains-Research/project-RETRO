@@ -17,7 +17,7 @@ from retro_pytorch.training import TrainingWrapper
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("-no", "--no-retrieve", action="store_true", help="Do not retrieve if flag added")
-parser.add_argument("-config", "--config", default="config.yaml", help="Config filename")
+parser.add_argument("-config", "--config", default="config_dev.yaml", help="Config filename")
 args = parser.parse_args()
 no_retrieve = args.no_retrieve
 config_name = args.config
@@ -90,7 +90,7 @@ batch_size_val = training_params.batch_size_val
 batch_accumulation = training_params.batch_accumulation
 total_items = 1367016
 
-accumulate_steps = accumulate_steps = (
+accumulate_steps = (
     batch_accumulation // batch_size if batch_accumulation % batch_size == 0 else batch_accumulation // batch_size + 1
 )
 batch_accumulation = accumulate_steps * batch_size
