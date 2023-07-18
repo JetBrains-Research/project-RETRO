@@ -278,7 +278,9 @@ class TrainingWrapper(nn.Module):
         ### chunks, that have only PAD_TOKEN are marked, so that retrieve results to be put to PAD_TOKEN too.
         zero_ind = torch.all(past_seq_chunks == PAD_TOKEN, dim=-1)
 
-        sos = SOS_ID * torch.ones((past_seq_chunks.shape[0], 1), dtype=torch.bool, device=seq.device)## TODO dtype=torch.bool
+        sos = SOS_ID * torch.ones(
+            (past_seq_chunks.shape[0], 1), dtype=torch.bool, device=seq.device
+        )  ## TODO dtype=torch.bool
         past_seq_chunks = torch.cat((sos, past_seq_chunks), dim=1)
 
         total_neighbors_to_fetch = self.knn_extra_neighbors + self.knn + 1
@@ -357,12 +359,10 @@ class TrainingWrapper(nn.Module):
         seq_len = seq_len - 1
         seq_chunks = rearrange(seq[:, :-1], "b (n c) -> (b n) c", c=self.chunk_size)
         ideal_chunks = torch.cat((seq_chunks[1:], seq_chunks[-1].unsqueeze(0)), dim=0)
-        ideal_chunks = torch.cat((seq_chunks, ideal_chunks), dim = -1)
-        ideal_chunks = rearrange(ideal_chunks, "(b n) c -> b n 1 c", c=2*self.chunk_size, b=b)
+        ideal_chunks = torch.cat((seq_chunks, ideal_chunks), dim=-1)
+        ideal_chunks = rearrange(ideal_chunks, "(b n) c -> b n 1 c", c=2 * self.chunk_size, b=b)
         ideal_chunks = ideal_chunks.repeat(1, 1, 2, 1)
         ideal_chunks = ideal_chunks.reshape(b, seq_len // self.chunk_size, 2, 2 * self.chunk_size)
-
-
 
         return ideal_chunks.cuda()
 

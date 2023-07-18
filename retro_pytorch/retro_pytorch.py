@@ -633,7 +633,7 @@ class RETRO(nn.Module):
             deepnorm_init(self.encoder, 0.87 * ((enc_depth**4) * dec_depth) ** -0.0625)
             deepnorm_init(self.decoder, (12 * dec_depth) ** -0.25)
 
-    def forward_without_retrieval(self, seq, return_loss=False, seq_len = 0):
+    def forward_without_retrieval(self, seq, return_loss=False, seq_len=0):
         if seq_len == 0:
             seq_len = self.seq_len
         if return_loss:
@@ -655,8 +655,6 @@ class RETRO(nn.Module):
 
         # project to logits
         logits = self.to_logits(embed)
-
-
 
         if not return_loss:
             return logits

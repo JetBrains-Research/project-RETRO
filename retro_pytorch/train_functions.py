@@ -23,15 +23,16 @@ def calc_loss(
 
     return loss
 
+
 def calc_loss_concat(
-        seq: torch.Tensor,
-        docs: torch.Tensor,
-        model,
-        fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    seq: torch.Tensor,
+    docs: torch.Tensor,
+    model,
+    fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
 ) -> Any:
     retrieved = fetch_neighbours(seq.cuda(), doc_except=docs)
 
-    retrieve = torch.reshape(retrieved[:, :, 0, 64:], (retrieved.size(0), retrieved.size(1) * retrieved.size(-1)//2))
+    retrieve = torch.reshape(retrieved[:, :, 0, 64:], (retrieved.size(0), retrieved.size(1) * retrieved.size(-1) // 2))
     seq_concat = torch.concat((retrieve, seq.cuda()), dim=-1)
 
     loss = model(seq_concat.cuda(), retrieved=None, return_loss=True, seq_len=512)
@@ -84,6 +85,7 @@ def val_steps(
             losses_val_cur.append(loss.item())
 
     return losses_val_cur
+
 
 def val_steps_concat(
     model: Any,
