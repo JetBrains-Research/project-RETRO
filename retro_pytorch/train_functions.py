@@ -4,17 +4,6 @@ from typing import Any, Callable, Iterator, TextIO
 import torch
 from tqdm import tqdm
 
-# from transformers import AutoTokenizer
-# from omegaconf import OmegaConf
-#
-# conf_load = OmegaConf.load('config.yaml')
-# paths = conf_load.paths
-# tokenizer = AutoTokenizer.from_pretrained(paths.encoder_path)
-#
-# def decode(tens):
-#     return tokenizer.batch_decode(tens, skip_special_tokens=True)
-
-
 def calc_loss(
     seq: torch.Tensor,
     docs: torch.Tensor,
@@ -39,25 +28,6 @@ def calc_loss(
         loss.backward()
 
     return loss
-
-
-# def calc_loss_concat(
-#         seq: torch.Tensor,
-#         docs: torch.Tensor,
-#         model,
-#         fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-# ) -> Any:
-#     retrieved = fetch_neighbours(seq.cuda(), doc_except=docs)
-#
-#     seq_concat = torch.reshape(retrieved[:, :, 0, :], (retrieved.size(0), retrieved.size(1) * retrieved.size(-1)))
-#     seq_concat = torch.concat((seq_concat, seq.cuda()), dim=-1)
-#
-#     loss = model(seq_concat.cuda(), retrieved=None, return_loss=True, mask_concat=True)
-#     if loss.requires_grad:
-#         loss.backward()
-#
-#     return loss
-
 
 def grad_step(optimizer: Any, scheduler: Any, loss: Any, loss_train_list: list[float], out_file) -> None:
     optimizer.step()
@@ -100,27 +70,10 @@ def val_steps(
     losses_val_cur = []
     with torch.no_grad():
         for seq, docs in tqdm(aggregate, ncols=100, disable=not verbose):
-            loss = calc_loss(seq, docs, model, no_retrieve, fetch_neighbours_fn, chunk_iter=chunk_iter)
+            loss = calc_loss(seq, docs, model, no_retrieve, fetch_neighbours_fn=fetch_neighbours_fn, chunk_iter=chunk_iter)
             losses_val_cur.append(loss.item())
 
     return losses_val_cur
-
-
-# def val_steps_concat(
-#     model: Any,
-#     no_retrieve: bool,
-#     fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-#     aggregate: list[tuple[torch.Tensor, torch.Tensor]],
-# ) -> list[float]:
-#     model.eval()
-#     losses_val_cur = []
-#     with torch.no_grad():
-#         for seq, docs in tqdm(aggregate, ncols=100):
-#             loss = calc_loss_concat(seq, docs, model, fetch_neighbours)
-#             losses_val_cur.append(loss.item())
-#
-#     return losses_val_cur
-
 
 def val_update(
     model: Any,

@@ -33,7 +33,7 @@ else:
     print(f"Retrieval would be used during training")
     add_flag = ""
 
-add_flag = "_сontrast"
+add_flag = "_warm"
 
 """
 Training. Add flag --no-retrieve or -no if you want to train without retrieval.
@@ -63,9 +63,10 @@ with open(stats_path, "r") as f:
 
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
 retro = RETRO(**config.model_hyperparameters).cuda()
-retro.load_state_dict(torch.load(paths.model_folder + "retro_сontrast_last_1.pth"))
+### !!!! TODO Here we fix particular model at performed steps
+retro.load_state_dict(torch.load(paths.model_folder + "retro_сontrast_last_it23_4.335.pth"))
 retro.train()
-n_performed_steps = 14
+n_performed_steps = 23
 
 if no_retrieve:
     print("Freezing encoder parameters")
@@ -151,10 +152,10 @@ saved_ind = 0
 saved_last_ind = 0
 val_dl_iter = iter(val_dl)
 
-for train_steps, (seq, docs) in enumerate(tqdm(train_dl, total=total_items // batch_size), start=1):
+for train_steps, (seq, docs) in enumerate(tqdm(train_dl, total=total_items // batch_size, ncols=80), start=1):
 
-    # if train_steps <= n_performed_steps*freq_val:
-    #     continue
+    if train_steps <= n_performed_steps*freq_val:
+        continue
 
     loss = calc_loss(
         seq,

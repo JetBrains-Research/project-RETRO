@@ -372,22 +372,12 @@ def chunks_to_index_and_embed(
         print("Found index file. Reading")
         index = faiss_read_index(index_path)
     else:
-        # memmap_file_to_chunks_(
-        #     embedding_path,
-        #     shape=embed_shape,
-        #     dtype=np.float32,
-        #     folder=EMBEDDING_TMP_SUBFOLDER,
-        #     max_rows_per_file=max_rows_per_file,
-        # )
-
         index = index_embeddings(
-            # embeddings_folder=EMBEDDING_TMP_SUBFOLDER,
             embedding_path=embedding_path,
             index_folder=index_folder,
             index_file=index_file,
             num_chunks=num_chunks,
             index_params=index_params,
-            # **index_kwargs,
         )
 
     embeddings = np.memmap(embedding_path, shape=embed_shape, dtype=np.float32, mode="r")

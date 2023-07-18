@@ -775,7 +775,7 @@ class RETRO(nn.Module):
             mask = loss2 != 0
             loss2 = loss2[mask].mean()
 
-            margin = 2.0
+            margin = 4.0
             return loss1 + torch.clamp(margin - (loss2 - loss1), min=0)
         else:
             loss = F.cross_entropy(rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id)

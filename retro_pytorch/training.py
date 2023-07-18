@@ -297,17 +297,10 @@ class TrainingWrapper(nn.Module):
         ) as chunk_memmap, memmap(
             self.doc_ids_memmap_path, shape=(self.num_chunks,), dtype=np.int32, mode="r"
         ) as doc_ids_storage:
-            # print_file = open('output.txt', 'a')
             # mask out any neighbors that belong to the same document to -1
             neighbor_doc_ids = doc_ids_storage[indices]
-            # print(neighbor_doc_ids, file = print_file)
             neighbor_from_same_doc = doc_except.flatten().numpy()[..., np.newaxis] == neighbor_doc_ids
-            # print(neighbor_from_same_doc, file = print_file)
-            # print(distances, file = print_file)
-            #####indices = np.where(neighbor_from_same_doc, -1, indices)
             distances = np.where(neighbor_from_same_doc, 1e3, distances)
-            # print(distances, file = print_file)
-
             #!!! TODO check that there is retrieved chunks from another docs
 
             # # re-sort indices by updated distances
@@ -334,6 +327,14 @@ class TrainingWrapper(nn.Module):
         """
 
         chunks = next(chunk_iter)[0]
+        if chunks.size(0) > seq.size(0):
+            batch_size = seq.size(0)
+            chunks = chunks[:batch_size]
+        while chunks.size(0) != seq.size(0):
+            chunks = next(chunk_iter)[0]
+            if chunks.size(0) > seq.size(0):
+                batch_size = seq.size(0)
+                chunks = chunks[:batch_size]
 
         # past_seq_chunks = rearrange(seq[:, :-1], "b (n c) -> (b n) c", c=self.chunk_size)
         # zero_ind = torch.all(past_seq_chunks == PAD_TOKEN, dim=1)
