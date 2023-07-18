@@ -154,7 +154,7 @@ val_dl_iter = iter(val_dl)
 
 for train_steps, (seq, docs) in enumerate(tqdm(train_dl, total=total_items // batch_size, ncols=80), start=1):
 
-    if train_steps <= n_performed_steps*freq_val:
+    if train_steps <= n_performed_steps * freq_val:
         continue
 
     loss = calc_loss(

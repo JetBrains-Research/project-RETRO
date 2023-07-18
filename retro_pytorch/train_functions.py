@@ -4,6 +4,7 @@ from typing import Any, Callable, Iterator, TextIO
 import torch
 from tqdm import tqdm
 
+
 def calc_loss(
     seq: torch.Tensor,
     docs: torch.Tensor,
@@ -28,6 +29,7 @@ def calc_loss(
         loss.backward()
 
     return loss
+
 
 def grad_step(optimizer: Any, scheduler: Any, loss: Any, loss_train_list: list[float], out_file) -> None:
     optimizer.step()
@@ -70,10 +72,13 @@ def val_steps(
     losses_val_cur = []
     with torch.no_grad():
         for seq, docs in tqdm(aggregate, ncols=100, disable=not verbose):
-            loss = calc_loss(seq, docs, model, no_retrieve, fetch_neighbours_fn=fetch_neighbours_fn, chunk_iter=chunk_iter)
+            loss = calc_loss(
+                seq, docs, model, no_retrieve, fetch_neighbours_fn=fetch_neighbours_fn, chunk_iter=chunk_iter
+            )
             losses_val_cur.append(loss.item())
 
     return losses_val_cur
+
 
 def val_update(
     model: Any,
