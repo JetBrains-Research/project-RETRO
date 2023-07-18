@@ -167,7 +167,7 @@ class TrainingWrapper(nn.Module):
         faiss_index_filename="knn.index",
         precalculate_knn=False,
         index_params,
-        **index_kwargs,
+        max_seq_len=512,
     ):
         super().__init__()
         assert isinstance(retro, RETRO), "retro must be instance of RETRO"
@@ -187,13 +187,12 @@ class TrainingWrapper(nn.Module):
             # aware(text='reprocess files')
             self.stats = text_folder_to_chunks_(
                 folder=documents_path,
-                # glob = glob,
                 data_file_paths=data_file_paths,
                 chunks_memmap_path=chunks_memmap_path,
                 seqs_memmap_path=seqs_memmap_path,
                 doc_ids_memmap_path=doc_ids_memmap_path,
                 chunk_size=chunk_size,
-                seq_len=retro.seq_len,
+                seq_len=max_seq_len,
                 max_chunks=max_chunks,
                 max_seqs=max_seqs,
             )
@@ -210,7 +209,7 @@ class TrainingWrapper(nn.Module):
         num_seqs = self.stats["seqs"]
         self.knn_extra_neighbors = knn_extra_neighbors
         self.knn = knn
-        self.seq_len = retro.seq_len
+        self.seq_len = max_seq_len
         self.doc_ids_memmap_path = doc_ids_memmap_path
         self.chunks_memmap_path = chunks_memmap_path
         self.all_chunks = np.memmap(
@@ -231,7 +230,6 @@ class TrainingWrapper(nn.Module):
             index_file=faiss_index_filename,
             force_reprocess=force_reprocess,
             precalculate_knn=precalculate_knn,
-            **index_kwargs,
         )
 
         # retro dataset
@@ -241,7 +239,7 @@ class TrainingWrapper(nn.Module):
             num_chunks=self.num_chunks,
             num_neighbors=knn,
             chunk_size=chunk_size,
-            seq_len=retro.seq_len,
+            seq_len=self.seq_len,
             chunk_memmap_path=chunks_memmap_path,
             chunk_nn_memmap_path=knn_memmap_path,
             seq_memmap_path=seqs_memmap_path,
@@ -250,7 +248,7 @@ class TrainingWrapper(nn.Module):
         # params needed for generation
 
         self.chunk_size = chunk_size
-        self.max_seq_len = self.retro.seq_len
+        self.max_seq_len = self.seq_len
 
         self.fetch_knn_chunks_fn = partial(
             knn_chunks_from_seq_chunks,
@@ -341,6 +339,32 @@ class TrainingWrapper(nn.Module):
         selected_pairs = np.array([np.concatenate(self.all_chunks[i : i + 2, :-1]) for i in start_indices])
         batch_shape = (batch_size, seq_size, self.knn, 2 * self.chunk_size)
         return torch.tensor(selected_pairs.reshape(batch_shape)).cuda()
+
+    def fetch_ideal(self, seq, doc_except=None):
+
+        """
+        fetches random chunk from database
+        """
+        # b, seq_len = seq.shape
+        # seq_len = seq_len - 1
+        # seq_chunks = rearrange(seq[:, :-1], "b (n c) -> (b n) c", c=self.chunk_size)
+        # ideal_chunks = torch.cat((seq_chunks[1:], seq_chunks[-1].unsqueeze(0)), dim=0)
+        # ideal_chunks = rearrange(ideal_chunks, "(b n) c -> b n c", c=self.chunk_size, b=b)
+        # ideal_chunks = ideal_chunks.unsqueeze(-2).unsqueeze(-2).repeat(1, 1, 2, 2, 1)
+        # ideal_chunks = ideal_chunks.reshape(b, seq_len // self.chunk_size, 2, 2 * self.chunk_size)
+
+        b, seq_len = seq.shape
+        seq_len = seq_len - 1
+        seq_chunks = rearrange(seq[:, :-1], "b (n c) -> (b n) c", c=self.chunk_size)
+        ideal_chunks = torch.cat((seq_chunks[1:], seq_chunks[-1].unsqueeze(0)), dim=0)
+        ideal_chunks = torch.cat((seq_chunks, ideal_chunks), dim = -1)
+        ideal_chunks = rearrange(ideal_chunks, "(b n) c -> b n 1 c", c=2*self.chunk_size, b=b)
+        ideal_chunks = ideal_chunks.repeat(1, 1, 2, 1)
+        ideal_chunks = ideal_chunks.reshape(b, seq_len // self.chunk_size, 2, 2 * self.chunk_size)
+
+
+
+        return ideal_chunks.cuda()
 
     def generate_pure_random_chunk(self, seq, doc_except=None):
 

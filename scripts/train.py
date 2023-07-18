@@ -58,6 +58,7 @@ with open(stats_path, "r") as f:
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
 retro = RETRO(**config.model_hyperparameters).cuda()
 
+
 if no_retrieve:
     print("Freezing encoder parameters")
     for param in retro.encoder.parameters():

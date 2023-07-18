@@ -347,7 +347,6 @@ def chunks_to_index_and_embed(
     embed_dim=MODEL_DIM,
     index_folder,
     index_file="knn.index",
-    **index_kwargs,
 ):
     embedding_path = f"{chunk_memmap_path}.embedded"
     embed_shape = (num_chunks, embed_dim)
@@ -410,7 +409,6 @@ def chunks_to_precalculated_knn_(
     force_reprocess=False,
     index_file="knn.index",
     precalculate_knn=False,
-    **index_kwargs,
 ):
     chunk_path = Path(chunk_memmap_path)
     knn_path = chunk_path.parents[0] / f"{chunk_path.stem}.knn{chunk_path.suffix}"
@@ -433,7 +431,6 @@ def chunks_to_precalculated_knn_(
         index_folder=chunk_path.parents[0],
         index_file=index_file,
         index_params=index_params,
-        **index_kwargs,
     )
 
     """

@@ -633,9 +633,11 @@ class RETRO(nn.Module):
             deepnorm_init(self.encoder, 0.87 * ((enc_depth**4) * dec_depth) ** -0.0625)
             deepnorm_init(self.decoder, (12 * dec_depth) ** -0.25)
 
-    def forward_without_retrieval(self, seq, return_loss=False):
+    def forward_without_retrieval(self, seq, return_loss=False, seq_len = 0):
+        if seq_len == 0:
+            seq_len = self.seq_len
         if return_loss:
-            seq, labels = seq[:, :-1], seq[:, 1:]
+            seq, labels = seq[:, :-1], seq[:, -seq_len:]
         # embed sequence and cut it
         embed = self.token_emb(seq)
         embed = embed[:, : self.seq_len]
@@ -649,8 +651,12 @@ class RETRO(nn.Module):
         embed = self.to_decoder_model_dim(embed)
         embed = self.decoder(embed)
 
+        embed = embed[:, -seq_len:]
+
         # project to logits
         logits = self.to_logits(embed)
+
+
 
         if not return_loss:
             return logits
@@ -660,7 +666,7 @@ class RETRO(nn.Module):
         loss = F.cross_entropy(rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id)
         return loss
 
-    def forward(self, seq, retrieved=None, return_loss=False):
+    def forward(self, seq, retrieved=None, return_loss=False, seq_len=0):
         """
         b - batch
         n - sequence length / chunk length
@@ -670,7 +676,7 @@ class RETRO(nn.Module):
         """
 
         if not exists(retrieved):
-            return self.forward_without_retrieval(seq, return_loss=return_loss)
+            return self.forward_without_retrieval(seq, return_loss=return_loss, seq_len=seq_len)
 
         # assert not (return_loss and not self.training), 'must be training if returning loss'
 
