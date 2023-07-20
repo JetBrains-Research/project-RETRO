@@ -14,7 +14,7 @@ from omegaconf import OmegaConf
 
 from retro_pytorch.dataloaders import DataLoaderFromFile, DatasetJsonl
 from retro_pytorch.retro_pytorch import RETRO
-from retro_pytorch.train_functions import val_steps
+from retro_pytorch.train_functions import aggregate_batches, val_steps, val_steps_concat
 from retro_pytorch.training import TrainingWrapper
 
 parser = argparse.ArgumentParser(description="")
@@ -36,17 +36,14 @@ with open(stats_path, "r") as f:
 
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
 
-retro = RETRO(**config.model_hyperparameters).cuda()
-if no_retrieve:
-    print("Freezing encoder parameters")
-    for param in retro.encoder.parameters():
-        param.requires_grad = False
-#%%
-
 val_data_path = os.path.join(paths.data_folder, paths.val_data_file)
 
-gc.collect()
-torch.cuda.empty_cache()
+config.model_hyperparameters.max_seq_len += 512
+retro = RETRO(**config.model_hyperparameters).cuda()
+
+print("Freezing encoder parameters")
+for param in retro.encoder.parameters():
+    param.requires_grad = False
 
 wrapper_db = TrainingWrapper(
     retro=retro,  # path to retro instance
@@ -63,7 +60,15 @@ wrapper_db = TrainingWrapper(
     knn_extra_neighbors=retrieve_hyperparams.knn_extra_neighbors,  # num extra neighbors to fetch
     precalculate_knn=False,
     index_params=index_params,
+    max_seq_len=512,
 )
+
+
+def list_to_file(lst, target_file):
+    with open(target_file, "w") as output:
+        for item in lst:
+            output.write(str(item))
+            output.write("\n")
 
 
 #%%
@@ -71,7 +76,7 @@ wrapper_db = TrainingWrapper(
 # def random_seq():
 #     torch.randint(0, 30000)
 
-batch_size = 16
+batch_size = 64
 total_items = 136701
 
 print(f"Batch size = {batch_size}")
@@ -81,17 +86,49 @@ val_dl = DataLoaderFromFile(val_ds, batch_size=batch_size)
 val_dl_iter = iter(val_dl)
 
 fetch_neighbours = wrapper_db.fetch_neighbours
-losses_val: list[float] = []
+fetch_random_chunk = wrapper_db.fetch_random_chunk
+generate_pure_random_chunk = wrapper_db.generate_pure_random_chunk
+fetch_ideal = wrapper_db.fetch_ideal
+
+losses_val_cur: list[float] = []
+losses_val_rnd_cur: list[float] = []
+losses_val_pure_rnd_cur: list[float] = []
+losses_ideal: list[float] = []
 
 # model_file = model_folder + 'retro_no_retrieve_last.pth'
-model_file = paths.model_folder + "retro_best_0.pth"
+model_file = paths.model_folder + "retro_concat_last_2.pth"
 retro.load_state_dict(torch.load(model_file))
 retro.eval()
 
-tt = time.time()  ## TODO rewrite this procedure to match new trainig pipeline
-losses_val, _ = val_steps(retro, no_retrieve, fetch_neighbours, num_val=100, val_dl_iter=val_dl_iter)
+tt = time.time()
+aggregate, val_step = aggregate_batches(val_dl_iter, 1_000_000_000)
+# losses_val, _ = val_steps(retro, no_retrieve, fetch_neighbours, num_val=100, val_dl_iter=val_dl_iter)
 
-val_avg = sum(losses_val) / len(losses_val)
-print(f"Average validation loss = {val_avg}")
+
+losses_val_neighbour = val_steps_concat(retro, no_retrieve, fetch_neighbours, aggregate)
+filename = os.path.join(paths.out_folder, "final_val_loss_concat_neigh" + ".txt")
+list_to_file(losses_val_neighbour, filename)
+
+losses_val_rnd = val_steps_concat(retro, no_retrieve, fetch_random_chunk, aggregate)
+filename = os.path.join(paths.out_folder, "final_val_loss_concat_some" + ".txt")
+list_to_file(losses_val_rnd, filename)
+
+losses_val_pure_rnd = val_steps_concat(retro, no_retrieve, generate_pure_random_chunk, aggregate)
+filename = os.path.join(paths.out_folder, "final_val_loss_concat_rand" + ".txt")
+list_to_file(losses_val_pure_rnd, filename)
+
+losses_val_ideal = val_steps_concat(retro, no_retrieve, fetch_ideal, aggregate)
+filename = os.path.join(paths.out_folder, "final_val_loss_concat_ideal" + ".txt")
+list_to_file(losses_val_ideal, filename)
+
+all_losses = [losses_val_neighbour, losses_val_rnd, losses_val_pure_rnd, losses_val_ideal]
+
+losses_av = [sum(losses_cur) / (len(losses_cur)) for losses_cur in all_losses]
+
+filename_val = os.path.join(paths.out_folder, "final_val_loss_concat_avg" + ".txt")
+f_val = open(filename_val, "a")
+f_val.write(str(losses_av))
+
+
 time_used = time.time() - tt
 print(f"Time used = {time_used:.2f} s")

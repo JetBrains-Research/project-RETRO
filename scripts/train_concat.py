@@ -57,9 +57,14 @@ with open(stats_path, "r") as f:
     stats = json.load(f)
 
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
+import torch
 
 config.model_hyperparameters.max_seq_len += 512
 retro = RETRO(**config.model_hyperparameters).cuda()
+model_file = paths.model_folder + "retro_concat_last_1epoch.pth"
+retro.load_state_dict(torch.load(model_file))
+retro.train()
+
 
 print("Freezing encoder parameters")
 for param in retro.encoder.parameters():
@@ -84,6 +89,7 @@ wrapper_db = TrainingWrapper(
 )
 
 # %%
+
 
 ### setting up number of steps.
 freq_val = training_params.freq_val  # frequency of validation

@@ -56,8 +56,12 @@ with open(stats_path, "r") as f:
     stats = json.load(f)
 
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
-retro = RETRO(**config.model_hyperparameters).cuda()
+import torch
 
+retro = RETRO(**config.model_hyperparameters).cuda()
+model_file = paths.model_folder + "retro_no_retrieve_last.pth"
+retro.load_state_dict(torch.load(model_file))
+retro.train()
 
 if no_retrieve:
     print("Freezing encoder parameters")
