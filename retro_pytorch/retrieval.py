@@ -186,10 +186,12 @@ def text_folder_to_chunks_(
                 )
 
                 doc_chunk_len = chunks.shape[0]  # number of chunks in doc
-                doc_seq_len = seq.shape[0]
+                doc_seq_len = seq.shape[0] # number of sequences (512) in doc
 
                 # adding chunks, seqs and doc_ids
                 # doc_ids - is just a position of the file in a sequence
+                # seqs_memmap - contains chunk ids of the beggining of each sequence.
+                # doc_ids_memmap - doc_id of each chunk
 
                 chunks_memmap[total_chunks : (total_chunks + doc_chunk_len)] = chunks.numpy()
                 seqs_memmap[total_seqs : (total_seqs + doc_seq_len)] = seq.numpy() + total_chunks
@@ -198,6 +200,7 @@ def text_folder_to_chunks_(
                 total_chunks += doc_chunk_len
                 total_seqs += doc_seq_len
                 total_docs += 1
+    
 
     return dict(chunks=total_chunks, docs=total_docs, seqs=total_seqs, chunk_size=chunk_size)
 
@@ -290,7 +293,7 @@ def memmap_file_to_chunks_(memmap_path, *, folder, shape, dtype, max_rows_per_fi
     print("\n ----- saving FINISHED ----- \n")
 
 
-def build_compound_index(data, index_file: str, index_params: dict[Any, Any], d: int) -> Any:
+def build_compound_index(data, index_file: str, index_params: dict[Any, Any], d: int, verbose: bool = True, save_to_file: bool = True) -> Any:
     # m - number of NN edges in a graph HNSW
     # d - vectors dimension
     # efCons - efConstruction controls the size of the dynamic list for the nearest neighbors during the construction of the HNSW index.
@@ -301,14 +304,21 @@ def build_compound_index(data, index_file: str, index_params: dict[Any, Any], d:
     index = faiss.IndexHNSWFlat(d, index_params.m)
     index.hnsw.efConstruction = index_params.efCons
     index.hnsw.efSearch = index_params.efSearch
-    index.verbose = index_params.verbose
+    
+    if verbose: 
+        index.verbose = index_params.verbose
+    else:
+        index.verbose = False
 
-    print("Training index")
+    if verbose:
+        print("Training index")
     index.train(data)
-    print("Adding data")
+    if verbose:
+        print("Adding data")
     assert index.is_trained
     index.add(data)
-    faiss.write_index(index, index_file)
+    if save_to_file:
+        faiss.write_index(index, index_file)
 
     return index
 
@@ -371,14 +381,6 @@ def chunks_to_index_and_embed(
         print("Found index file. Reading")
         index = faiss_read_index(index_path)
     else:
-        # memmap_file_to_chunks_(
-        #     embedding_path,
-        #     shape=embed_shape,
-        #     dtype=np.float32,
-        #     folder=EMBEDDING_TMP_SUBFOLDER,
-        #     max_rows_per_file=max_rows_per_file,
-        # )
-
         index = index_embeddings(
             # embeddings_folder=EMBEDDING_TMP_SUBFOLDER,
             embedding_path=embedding_path,

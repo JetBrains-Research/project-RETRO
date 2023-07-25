@@ -14,9 +14,9 @@ model_hyperparameters:
   dec_ff_dropout: 0.25  # decoder feedforward dropout
 training_params:
   lr: 3e-4 # learning rate
-  freq_val: 1000 # frequency of validation
-  num_val: 40 # number of validation steps
-  batch_size: 8
+  freq_val: 2000 # frequency of validation
+  num_val: 20 # number of validation steps
+  batch_size: 10
   batch_size_val: 64 # batch size on validation steps
   batch_accumulation: 60 # number of samples before optimization step
 paths:

@@ -64,7 +64,10 @@ class RETRODataset(Dataset):
         num_neighbors,
         chunk_memmap_path,
         chunk_nn_memmap_path,
-        seq_memmap_path,
+        chunk_nn_memmap_path_option,
+        seqs_memmap_path,
+        split_meta_info,
+        split,
         eos_id=EOS_ID,
         pad_id=0.0,
         add_continuations=True,
@@ -75,6 +78,10 @@ class RETRODataset(Dataset):
         self.seq_num_chunks = seq_len // chunk_size
         self.eos_id = eos_id
         self.pad_id = pad_id
+        
+        split_loc = split_meta_info[split]
+        self.split_size = split_loc["split size in seqs"]
+        self.split_start = split_loc["first sequence index"]
 
         num_chunks_with_padding = num_chunks + self.seq_num_chunks
 
@@ -84,15 +91,18 @@ class RETRODataset(Dataset):
         self.add_continuations = add_continuations
         self.get_chunks = partial(memmap, chunk_memmap_path, dtype=np.int32, shape=chunks_shape)
         self.get_knns = partial(memmap, chunk_nn_memmap_path, dtype=np.int32, shape=knn_shape)
-        self.get_seqs = partial(memmap, seq_memmap_path, dtype=np.int32, shape=(num_sequences,))
+        self.get_knns_option = partial(memmap, chunk_nn_memmap_path_option, dtype=np.int32, shape=knn_shape)
+        self.get_seqs = partial(memmap, seqs_memmap_path, dtype=np.int32, shape=(num_sequences,))
 
     def __len__(self):
-        return self.num_sequences
+        return self.split_size
 
     def __getitem__(self, ind):
         # global begin_chunk_index, chunk_range, chunks, seq_tokens_, seq_tokens, seq_mask, seq_mask_
-        with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_seqs() as seqs_memmap:
-            begin_chunk_index = seqs_memmap[ind]
+        
+        index = self.split_start + ind
+        with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_knns_option() as knns_memmap_option, self.get_seqs() as seqs_memmap:
+            begin_chunk_index = seqs_memmap[index]
             chunk_range = slice(begin_chunk_index, (begin_chunk_index + self.seq_num_chunks))
             # print(chunk_range)
             chunks = chunks_memmap[chunk_range]
@@ -109,18 +119,20 @@ class RETRODataset(Dataset):
 
             # derive retrieved tokens
             knns = knns_memmap[chunk_range]
+            knns_option = knns_memmap_option[chunk_range]
 
-            retrieved = knn_to_retrieved_chunks(
-                knns,
+            retrieved_1, retrieved_2 = (knn_to_retrieved_chunks(
+                knn,
                 chunks_memmap,
                 add_continuations=self.add_continuations,
                 eos_id=self.eos_id,
                 num_chunks=self.num_chunks,
-            )
+            ) for knn in [knns, knns_option])
 
         seq_tokens_torch = torch.from_numpy(seq_tokens).long()
-        retrieved_torch = torch.from_numpy(retrieved).long()
-        return seq_tokens_torch, retrieved_torch
+        retrieved_1_torch = torch.from_numpy(retrieved_1).long()
+        retrieved_2_torch = torch.from_numpy(retrieved_2).long()
+        return seq_tokens_torch, retrieved_1_torch, retrieved_2_torch
 
 
 def split_into_chunks(seq_tokens, seq_length, pad_id=0):

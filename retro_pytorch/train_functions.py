@@ -2,44 +2,44 @@ from typing import Any, Callable, Iterator, TextIO
 
 import torch
 from tqdm import tqdm
+import numpy as np
 
 
-def calc_loss(
-    seq: torch.Tensor,
-    docs: torch.Tensor,
-    model,
-    no_retrieve: bool,
-    fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-) -> Any:
+# def calc_loss(
+#     seq: torch.Tensor,
+#     docs: torch.Tensor,
+#     model,
+#     no_retrieve: bool,
+#     fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = None,
+# ) -> Any:
 
-    if not no_retrieve:
-        retrieved = fetch_neighbours(seq.cuda(), doc_except=docs)
-    else:
-        retrieved = None
+#     if not no_retrieve:
+#         retrieved = fetch_neighbours(seq.cuda(), doc_except=docs)
+#     else:
+#         retrieved = None
 
-    loss = model(seq.cuda(), retrieved=retrieved, return_loss=True)
-    if loss.requires_grad:
-        loss.backward()
+#     loss = model(seq.cuda(), retrieved=retrieved, return_loss=True)
+#     if loss.requires_grad:
+#         loss.backward()
 
-    return loss
+#     return loss
 
+# def calc_loss_concat(
+#     seq: torch.Tensor,
+#     docs: torch.Tensor,
+#     model,
+#     fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+# ) -> Any:
+#     retrieved = fetch_neighbours(seq.cuda(), doc_except=docs)
 
-def calc_loss_concat(
-    seq: torch.Tensor,
-    docs: torch.Tensor,
-    model,
-    fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-) -> Any:
-    retrieved = fetch_neighbours(seq.cuda(), doc_except=docs)
+#     retrieve = torch.reshape(retrieved[:, :, 0, 64:], (retrieved.size(0), retrieved.size(1) * retrieved.size(-1) // 2))
+#     seq_concat = torch.concat((retrieve, seq.cuda()), dim=-1)
 
-    retrieve = torch.reshape(retrieved[:, :, 0, 64:], (retrieved.size(0), retrieved.size(1) * retrieved.size(-1) // 2))
-    seq_concat = torch.concat((retrieve, seq.cuda()), dim=-1)
+#     loss = model(seq_concat.cuda(), retrieved=None, return_loss=True, seq_len=512)
+#     if loss.requires_grad:
+#         loss.backward()
 
-    loss = model(seq_concat.cuda(), retrieved=None, return_loss=True, seq_len=512)
-    if loss.requires_grad:
-        loss.backward()
-
-    return loss
+#     return loss
 
 
 def grad_step(optimizer: Any, scheduler: Any, loss: Any, loss_train_list: list[float], out_file) -> None:
@@ -73,34 +73,41 @@ def aggregate_batches(
 
 def val_steps(
     model: Any,
+    val_dl,
+    num_val: int,
     no_retrieve: bool,
-    fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    aggregate: list[tuple[torch.Tensor, torch.Tensor]],
+    fetch_neighbours_list: list[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
 ) -> list[float]:
     model.eval()
     losses_val_cur = []
+    val_step = 0
     with torch.no_grad():
-        for seq, docs in tqdm(aggregate, ncols=100):
-            loss = calc_loss(seq, docs, model, no_retrieve, fetch_neighbours)
-            losses_val_cur.append(loss.item())
+        for seq, ret1, ret2 in tqdm(val_dl, total=num_val, ncols=50):
+            seq = seq.cuda()
+            if no_retrieve:
+                loss = model(seq, retrieved=None, return_loss=True)
+                losses_val_cur.append([loss.item()])
+            else:
+                
+                loss1 = model(seq, retrieved=ret1.cuda(), return_loss=True)
+                loss2 = model(seq, retrieved=ret2.cuda(), return_loss=True)
+                loss3 = model(seq, retrieved=None, return_loss=True)
+                
+                losses = [loss1.item(), loss2.item(), loss3.item()]
+                
+                for fetch_neighbours in fetch_neighbours_list:
+                    retrieved = fetch_neighbours(seq)
+                    loss = model(seq, retrieved=retrieved.cuda(), return_loss=True)
+                    losses.append(loss.item())
+                
+                losses_val_cur.append(losses)
 
-    return losses_val_cur
+            val_step += 1
+            if val_step >= num_val:
+                    break
+                
+    return np.array(losses_val_cur), val_step
 
-
-def val_steps_concat(
-    model: Any,
-    no_retrieve: bool,
-    fetch_neighbours: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    aggregate: list[tuple[torch.Tensor, torch.Tensor]],
-) -> list[float]:
-    model.eval()
-    losses_val_cur = []
-    with torch.no_grad():
-        for seq, docs in tqdm(aggregate, ncols=100):
-            loss = calc_loss_concat(seq, docs, model, fetch_neighbours)
-            losses_val_cur.append(loss.item())
-
-    return losses_val_cur
 
 
 def val_update(
@@ -109,7 +116,6 @@ def val_update(
     losses_val_cur: list[list[float]],
     model_folder: str,
     model_name: str,
-    val_dl_iter: Iterator,
     f_val: TextIO,
     max_val_loss: float,
     saved_ind: int,
@@ -117,7 +123,7 @@ def val_update(
 ) -> tuple[float, int, int, Iterator]:
 
     if len(losses_val_cur) != 0:
-        loss_cur = [sum(losses_cur) / (len(losses_cur)) for losses_cur in losses_val_cur]
+        loss_cur = np.mean(losses_val_cur, axis = 0).tolist()
         losses_val.append(loss_cur)
         f_val.write(str(loss_cur) + "\n")
         f_val.flush()
@@ -130,4 +136,4 @@ def val_update(
         #     save_model(f"best_{saved_ind}", model, model_folder, model_name)
         #     saved_ind = (saved_ind + 1) % 3
 
-    return max_val_loss, saved_ind, saved_last_ind, val_dl_iter
+    return max_val_loss, saved_ind, saved_last_ind
