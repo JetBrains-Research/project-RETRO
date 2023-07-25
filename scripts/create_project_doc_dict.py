@@ -3,12 +3,12 @@ from retro_pytorch.utils import seed_all
 seed_all(1111)
 import argparse
 import json
-import jsonlines
-from collections import defaultdict
 import os
-from tqdm import tqdm
+from collections import defaultdict
 
+import jsonlines
 from omegaconf import OmegaConf
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("-no", "--no-retrieve", action="store_true", help="Do not retrieve if flag added")
@@ -24,11 +24,11 @@ paths = config.paths
 
 # %%
 
-data_file_paths=[
+data_file_paths = [
     os.path.join(paths.data_folder, "val.jsonl"),
     os.path.join(paths.data_folder, "test.jsonl"),
-    os.path.join(paths.data_folder, "train.jsonl")
-    ]
+    os.path.join(paths.data_folder, "train.jsonl"),
+]
 
 proj_doc_dict = defaultdict(list)
 
@@ -49,7 +49,7 @@ with open(paths.data_folder + "proj_doc_dict.json", "w") as file:
 # for project_id, doc_ids in proj_doc_dict.items():
 #     for doc_id in doc_ids:
 #         doc_proj_dict[doc_id] = project_id
-        
+
 # proj_size_dict = dict()
 # for project_id in proj_doc_dict.keys():
 #     proj_size_dict[project_id] = len(proj_doc_dict[project_id])
@@ -59,7 +59,7 @@ with open(paths.data_folder + "proj_doc_dict.json", "w") as file:
 
 # with open(paths.data_folder + "doc_proj_dict.json", "w") as file:
 #     json.dump(doc_proj_dict, file)
-    
+
 # with open(paths.data_folder + "proj_size_dict.json", "w") as file:
 #     json.dump(proj_size_dict, file)
 

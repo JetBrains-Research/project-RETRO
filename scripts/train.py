@@ -58,17 +58,17 @@ with open(stats_path, "r") as f:
 
 on_project = True
 if on_project:
-    print('Training on the retrieval from the projects')
-    add_flag = '_conc_proj'
-    knn_path_train=os.path.join(paths.texts_folder, 'knn_per_project.dat'),
-    knn_path_optional=os.path.join(paths.texts_folder, 'knn_from_all.dat'),
+    print("Training on the retrieval from the projects")
+    add_flag = "_conc_proj"
+    knn_path_train = (os.path.join(paths.texts_folder, "knn_per_project.dat"),)
+    knn_path_optional = (os.path.join(paths.texts_folder, "knn_from_all.dat"),)
 else:
-    print('Training on the retrieval from the all dataset')
-    add_flag = '_conc_all'
-    knn_path_train=os.path.join(paths.texts_folder, 'knn_from_all.dat'),
-    knn_path_optional=os.path.join(paths.texts_folder, 'knn_per_project.dat'),
+    print("Training on the retrieval from the all dataset")
+    add_flag = "_conc_all"
+    knn_path_train = (os.path.join(paths.texts_folder, "knn_from_all.dat"),)
+    knn_path_optional = (os.path.join(paths.texts_folder, "knn_per_project.dat"),)
 
-#config.model_hyperparameters.dec_cross_attn_layers = eval(config.model_hyperparameters.dec_cross_attn_layers)
+# config.model_hyperparameters.dec_cross_attn_layers = eval(config.model_hyperparameters.dec_cross_attn_layers)
 
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
 # import torch
@@ -102,9 +102,9 @@ wrapper_db = TrainingWrapper(
         paths.texts_folder, "train.doc_ids.dat"
     ),  # path to document ids per chunk (used for filtering neighbors belonging to same document)
     processed_stats_json_path=stats_path,
-    knn_memmap_path=knn_path_train, # used for the training
-    knn_memmap_path_option=knn_path_optional, ## used for additional validaton purposes
-    split_meta_path =  os.path.join(paths.texts_folder, 'split_meta_dict.json'),
+    knn_memmap_path=knn_path_train,  # used for the training
+    knn_memmap_path_option=knn_path_optional,  ## used for additional validaton purposes
+    split_meta_path=os.path.join(paths.texts_folder, "split_meta_dict.json"),
     knn_extra_neighbors=retrieve_hyperparams.knn_extra_neighbors,  # num extra neighbors to fetch
     precalculate_knn=False,
     index_params=index_params,
@@ -133,7 +133,7 @@ lr = training_params.lr  # learning rate
 freq_val = (freq_val // accumulate_steps) * accumulate_steps
 
 #%%
-val_dl = iter(wrapper_db.get_dataloader(split='val', batch_size=batch_size_val, shuffle = True))
+val_dl = iter(wrapper_db.get_dataloader(split="val", batch_size=batch_size_val, shuffle=True))
 
 optim, scheduler = wrapper_db.get_optimizer(warmup_steps=warmup_steps, training_steps=total_steps, lr=lr, wd=0.01)
 scheduler.step()
@@ -157,8 +157,8 @@ tt = time.time()
 saved_ind = 0
 saved_last_ind = 0
 for epoch in range(2):
-    train_dl = iter(wrapper_db.get_dataloader(split='train', batch_size=batch_size, shuffle=True, num_workers=4))
-    print(f'---------  EPOCH {epoch} ---------')
+    train_dl = iter(wrapper_db.get_dataloader(split="train", batch_size=batch_size, shuffle=True, num_workers=4))
+    print(f"---------  EPOCH {epoch} ---------")
     for train_steps, (seq, ret1, ret2) in enumerate(tqdm(train_dl, total=total_items // batch_size), start=1):
 
         if no_retrieve:
@@ -177,11 +177,16 @@ for epoch in range(2):
 
             print("------ Validation ------")
 
-            losses_val_cur, val_step = val_steps(retro, val_dl, num_val=num_val, no_retrieve = no_retrieve,
-                                           fetch_neighbours_list = [fetch_random_chunk, generate_pure_random_chunk])
+            losses_val_cur, val_step = val_steps(
+                retro,
+                val_dl,
+                num_val=num_val,
+                no_retrieve=no_retrieve,
+                fetch_neighbours_list=[fetch_random_chunk, generate_pure_random_chunk],
+            )
             if val_step < num_val:
                 print("Reloading VAL Dataloader")
-                val_dl = iter(wrapper_db.get_dataloader(split='val', batch_size=batch_size_val, shuffle = True))
+                val_dl = iter(wrapper_db.get_dataloader(split="val", batch_size=batch_size_val, shuffle=True))
 
             # if no_retrieve:
             #     losses_val_rnd_cur = losses_val_cur

@@ -1,4 +1,5 @@
 import json
+import os
 from functools import partial
 from pathlib import Path
 
@@ -8,7 +9,6 @@ import torch.nn.functional as F
 from einops import rearrange
 from torch import nn
 from torch.utils.data import DataLoader
-import os
 
 from retro_pytorch.data import RETRODataset, knn_to_retrieved_chunks
 from retro_pytorch.optimizer import get_optimizer
@@ -161,9 +161,9 @@ class TrainingWrapper(nn.Module):
         chunks_memmap_path="./train.chunks.dat",
         seqs_memmap_path="./train.seq.dat",
         doc_ids_memmap_path="./train.doc_ids.dat",
-        knn_memmap_path = './knn_from_all.dat',
-        knn_memmap_path_option = './knn_from_all.dat',
-        split_meta_path = './split_meta_dict.json',
+        knn_memmap_path="./knn_from_all.dat",
+        knn_memmap_path_option="./knn_from_all.dat",
+        split_meta_path="./split_meta_dict.json",
         max_chunks=1_000_000,
         max_seqs=100_000,
         knn_extra_neighbors=100,
@@ -176,7 +176,7 @@ class TrainingWrapper(nn.Module):
         super().__init__()
         assert isinstance(retro, RETRO), "retro must be instance of RETRO"
         self.retro = retro
-        
+
         with open(split_meta_path, "r") as file:
             self.split_meta_info = json.load(file)
 
@@ -219,20 +219,20 @@ class TrainingWrapper(nn.Module):
         self.seq_len = max_seq_len
         self.doc_ids_memmap_path = doc_ids_memmap_path
         self.chunks_memmap_path = chunks_memmap_path
-        self.knn_memmap_path=knn_memmap_path
-        self.knn_memmap_path_option=knn_memmap_path_option
-        self.seqs_memmap_path=seqs_memmap_path
+        self.knn_memmap_path = knn_memmap_path
+        self.knn_memmap_path_option = knn_memmap_path_option
+        self.seqs_memmap_path = seqs_memmap_path
         self.all_chunks = np.memmap(
             chunks_memmap_path, dtype=np.int32, mode="r", shape=(self.num_chunks, chunk_size + 1)
         )
 
         # calculate knn memmap path and get the faiss index
         # todo - make sure if faiss_index_filename is found, do not reprocess unless flag is given
-        
+
         if not os.path.exists(knn_memmap_path):
-            
-            print('KNN file is not found. Creating or Loading index')
-        
+
+            print("KNN file is not found. Creating or Loading index")
+
             knn_memmap_path, faiss_index = chunks_to_precalculated_knn_(
                 num_chunks=self.num_chunks,
                 chunk_size=chunk_size,
@@ -245,7 +245,7 @@ class TrainingWrapper(nn.Module):
                 force_reprocess=force_reprocess,
                 precalculate_knn=precalculate_knn,
             )
-            
+
             self.chunk_size = chunk_size
             self.max_seq_len = self.seq_len
 
@@ -269,8 +269,7 @@ class TrainingWrapper(nn.Module):
                 pad_with_os=False,
             )
         else:
-            print(f'Found KNN file at {knn_memmap_path}')
-            
+            print(f"Found KNN file at {knn_memmap_path}")
 
     def fetch_neighbours(self, seq: torch.Tensor, doc_except: torch.Tensor) -> torch.Tensor:
         # global neighbor_doc_ids, neighbor_from_same_doc, distances
@@ -465,7 +464,7 @@ class TrainingWrapper(nn.Module):
         return out
 
     def get_dataloader(self, split, **kwargs):
-        
+
         # retro dataset
         self.ds = RETRODataset(
             num_sequences=self.num_seqs,
@@ -477,10 +476,10 @@ class TrainingWrapper(nn.Module):
             chunk_nn_memmap_path=self.knn_memmap_path,
             chunk_nn_memmap_path_option=self.knn_memmap_path_option,
             seqs_memmap_path=self.seqs_memmap_path,
-            split_meta_info = self.split_meta_info,
+            split_meta_info=self.split_meta_info,
             split=split,
         )
-        
+
         return DataLoader(self.ds, **kwargs)
 
     def get_optimizer(self, **kwargs):

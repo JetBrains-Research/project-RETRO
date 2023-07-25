@@ -3,13 +3,13 @@ from retro_pytorch.utils import seed_all
 seed_all(1111)
 import argparse
 import json
-import jsonlines
-from collections import defaultdict
 import os
-from tqdm import tqdm
+from collections import defaultdict
 
-from omegaconf import OmegaConf
+import jsonlines
 import numpy as np
+from omegaconf import OmegaConf
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("-config", "--config", default="config.yaml", help="Config filename")
@@ -25,12 +25,12 @@ with open(stats_path, "r") as f:
     stats = json.load(f)
 # %%
 
-splits = ['val', 'test', 'train']
+splits = ["val", "test", "train"]
 
 split_doc_dict = defaultdict(list)
 
 for split in splits:
-    
+
     file = os.path.join(paths.data_folder, split + ".jsonl")
 
     with jsonlines.open(file) as reader:
@@ -71,7 +71,11 @@ for split in splits:
     mask = (seq_docs >= first_doc) & (seq_docs <= last_doc)
     num_seqs = np.sum(mask)
     first_seq_ind = np.where(seq_docs == first_doc)[0][0]
-    split_meta_dict[split] = {'split size in seqs':int(num_seqs), 'first doc_id': int(first_doc), 'first sequence index': int(first_seq_ind)}
+    split_meta_dict[split] = {
+        "split size in seqs": int(num_seqs),
+        "first doc_id": int(first_doc),
+        "first sequence index": int(first_seq_ind),
+    }
 
 
 with open(paths.data_folder + "split_meta_dict.json", "w") as file:
@@ -93,9 +97,9 @@ with open(paths.data_folder + "split_meta_dict.json", "r") as file:
 #     doc_ids_memmap_path = os.path.join(paths.texts_folder, "train.doc_ids.dat")
 #     doc_ids = np.memmap(doc_ids_memmap_path, dtype=np.int32, mode="r")
 #     doc_ids = np.array(doc_ids)
-    
+
 #     split_docs = np.array(split_doc_dict[split])
-    
+
 #     mask = np.isin(doc_ids, split_docs)
 #     np.sum(mask)
 #     indices_in_split_docs = np.where(mask)[0]
@@ -104,4 +108,3 @@ with open(paths.data_folder + "split_meta_dict.json", "r") as file:
 # with open(paths.data_folder + "split_ind_dict.json", "w") as file:
 #     json.dump(split_ind_dict, file)
 # %%
-

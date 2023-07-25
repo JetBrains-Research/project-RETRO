@@ -634,14 +634,16 @@ class RETRO(nn.Module):
             deepnorm_init(self.decoder, (12 * dec_depth) ** -0.25)
 
     def forward(self, seq, retrieved=None, return_loss=False):
-        
+
         if exists(retrieved):
-            retrieved = torch.reshape(retrieved[:, :, 0, 64:], (retrieved.size(0), retrieved.size(1) * retrieved.size(-1) // 2))
+            retrieved = torch.reshape(
+                retrieved[:, :, 0, 64:], (retrieved.size(0), retrieved.size(1) * retrieved.size(-1) // 2)
+            )
             seq = torch.concat((retrieved, seq), dim=-1)
-            seq_len=512 # TODO look up, why I added this variable.
+            seq_len = 512  # TODO look up, why I added this variable.
         else:
             seq_len = 512
-            
+
         seq, labels = seq[:, :-1], seq[:, -seq_len:]
         # embed sequence and cut it
         embed = self.token_emb(seq)
@@ -677,7 +679,7 @@ class RETRO(nn.Module):
         d - feature dimension
         r - num retrieved neighbors
         """
-        print('forward cross_attn')
+        print("forward cross_attn")
         if not exists(retrieved):
             return self.forward_without_retrieval(seq, return_loss=return_loss)
 

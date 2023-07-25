@@ -1,9 +1,8 @@
 from typing import Any, Callable, Iterator, TextIO
 
+import numpy as np
 import torch
 from tqdm import tqdm
-import numpy as np
-
 
 # def calc_loss(
 #     seq: torch.Tensor,
@@ -88,26 +87,25 @@ def val_steps(
                 loss = model(seq, retrieved=None, return_loss=True)
                 losses_val_cur.append([loss.item()])
             else:
-                
+
                 loss1 = model(seq, retrieved=ret1.cuda(), return_loss=True)
                 loss2 = model(seq, retrieved=ret2.cuda(), return_loss=True)
                 loss3 = model(seq, retrieved=None, return_loss=True)
-                
+
                 losses = [loss1.item(), loss2.item(), loss3.item()]
-                
+
                 for fetch_neighbours in fetch_neighbours_list:
                     retrieved = fetch_neighbours(seq)
                     loss = model(seq, retrieved=retrieved.cuda(), return_loss=True)
                     losses.append(loss.item())
-                
+
                 losses_val_cur.append(losses)
 
             val_step += 1
             if val_step >= num_val:
-                    break
-                
-    return np.array(losses_val_cur), val_step
+                break
 
+    return np.array(losses_val_cur), val_step
 
 
 def val_update(
@@ -123,7 +121,7 @@ def val_update(
 ) -> tuple[float, int, int, Iterator]:
 
     if len(losses_val_cur) != 0:
-        loss_cur = np.mean(losses_val_cur, axis = 0).tolist()
+        loss_cur = np.mean(losses_val_cur, axis=0).tolist()
         losses_val.append(loss_cur)
         f_val.write(str(loss_cur) + "\n")
         f_val.flush()
