@@ -102,10 +102,11 @@ class RETRODataset(Dataset):
 
         index = self.split_start + ind
         # commented lines were used to test correctness of the train-val split
-        # docs_memmap_path = '../../data/texts_folder_cls/train.doc_ids.dat'
-        # self.get_docs = partial(memmap, docs_memmap_path, dtype=np.int32, shape=self.num_chunks)
-        # with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_knns_option() as knns_memmap_option, self.get_seqs() as seqs_memmap, self.get_docs() as docs_memmap:
-        with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_knns_option() as knns_memmap_option, self.get_seqs() as seqs_memmap:
+        docs_memmap_path = "../../data/texts_folder_cls/train.doc_ids.dat"
+        self.get_docs = partial(memmap, docs_memmap_path, dtype=np.int32, shape=self.num_chunks)
+        with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_knns_option() as knns_memmap_option, self.get_seqs() as seqs_memmap, self.get_docs() as docs_memmap:
+            # with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_knns_option() as knns_memmap_option, self.get_seqs() as seqs_memmap:
+            # with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_seqs() as seqs_memmap:
 
             begin_chunk_index = seqs_memmap[index]
             chunk_range = slice(begin_chunk_index, (begin_chunk_index + self.seq_num_chunks))
@@ -126,8 +127,8 @@ class RETRODataset(Dataset):
 
             knns_option = knns_memmap_option[chunk_range]
 
-            # docs_knns = docs_memmap[knns]
-            # docs_chunks = docs_memmap[chunk_range]
+            docs_knns = docs_memmap[knns]
+            docs_chunks = docs_memmap[chunk_range]
             # retrieved_1 = knn_to_retrieved_chunks(
             retrieved_1, retrieved_2 = (
                 knn_to_retrieved_chunks(
@@ -143,7 +144,13 @@ class RETRODataset(Dataset):
         seq_tokens_torch = torch.from_numpy(seq_tokens).long()
         retrieved_1_torch = torch.from_numpy(retrieved_1).long()
         retrieved_2_torch = torch.from_numpy(retrieved_2).long()
-        return seq_tokens_torch, retrieved_1_torch, retrieved_2_torch  # , docs_chunks, docs_knns,
+        return (
+            seq_tokens_torch,
+            retrieved_1_torch,
+            retrieved_2_torch,
+            docs_chunks,
+            docs_knns,
+        )
 
 
 def split_into_chunks(seq_tokens, seq_length, pad_id=0):

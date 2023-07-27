@@ -255,6 +255,8 @@ def chunks_to_embeddings_(
     chunks_shape = (num_chunks, chunk_size + 1)
     embed_shape = (num_chunks, embed_dim)
 
+    print(f"Use cls = {use_cls_repr}")
+
     print("\n -----Embedding ------ \n")
 
     with memmap(chunks_memmap_path, shape=chunks_shape, dtype=np.int32) as chunks, memmap(
@@ -405,7 +407,7 @@ def chunks_to_precalculated_knn_(
     doc_ids_memmap_path,
     index_params,
     use_cls_repr=False,
-    max_rows_per_file=500,
+    max_rows_per_file=1000,
     chunks_to_embeddings_batch_size=256,
     embed_dim=MODEL_DIM,
     num_extra_neighbors=10,
@@ -434,51 +436,43 @@ def chunks_to_precalculated_knn_(
         index_folder=chunk_path.parents[0],
         index_file=index_file,
         index_params=index_params,
+        use_cls_repr=use_cls_repr,
+        chunks_to_embeddings_batch_size=chunks_to_embeddings_batch_size,
+        max_rows_per_file=max_rows_per_file,
     )
 
-    """
-    I switched off the precalculation of KNNs as I do not use it for now.
-    """
+    total_neighbors_to_fetch = num_extra_neighbors + num_nearest_neighbors + 1
 
-    if precalculate_knn:
-        total_neighbors_to_fetch = num_extra_neighbors + num_nearest_neighbors + 1
+    print("\n---- Calculating KNNs -----\n")
 
-        print("\n---- Calculating KNNs -----\n")
+    with memmap(knn_path, shape=(num_chunks, num_nearest_neighbors), dtype=np.int32, mode="w+") as knns, memmap(
+        doc_ids_memmap_path, shape=(num_chunks,), dtype=np.int32, mode="r"
+    ) as doc_ids:
+        for dim_slice in tqdm(
+            range_chunked(num_chunks, batch_size=max_rows_per_file),
+            total=num_chunks // max_rows_per_file,
+        ):
+            query_vector = embeddings[dim_slice]
 
-        with memmap(knn_path, shape=(num_chunks, num_nearest_neighbors), dtype=np.int32, mode="w+") as knns, memmap(
-            doc_ids_memmap_path, shape=(num_chunks,), dtype=np.int32, mode="r"
-        ) as doc_ids:
-            for dim_slice in tqdm(
-                range_chunked(num_chunks, batch_size=max_rows_per_file),
-                total=num_chunks // max_rows_per_file,
-            ):
-                query_vector = embeddings[dim_slice]
+            distances, indices = index.search(query_vector, k=total_neighbors_to_fetch)
 
-                distances, indices = index.search(query_vector, k=total_neighbors_to_fetch)
+            # remove self from distances and indices
+            distances = distances[:, 1:]
+            indices = indices[:, 1:]
 
-                # remove self from distances and indices
+            # mask out any neighbors that belong to the same document to -1
+            query_doc_ids = doc_ids[dim_slice]
+            neighbor_doc_ids = doc_ids[indices]
+            neighbor_from_same_doc = query_doc_ids[..., None] == neighbor_doc_ids
 
-                distances = distances[:, 1:]
-                indices = indices[:, 1:]
+            indices = np.where(neighbor_from_same_doc, -1, indices)
+            distances = np.where(neighbor_from_same_doc, 1e3, distances)
 
-                # mask out any neighbors that belong to the same document to -1
+            # re-sort indices by updated distances
+            indices = np.take_along_axis(indices, np.argsort(distances, axis=1), axis=1)
 
-                query_doc_ids = doc_ids[dim_slice]
-                neighbor_doc_ids = doc_ids[indices]
-                neighbor_from_same_doc = query_doc_ids[..., None] == neighbor_doc_ids
+            # store nearest neighbors to knn memmap
+            knns[dim_slice] = indices[:, :num_nearest_neighbors]
 
-                indices = np.where(neighbor_from_same_doc, -1, indices)
-                distances = np.where(neighbor_from_same_doc, 1e3, distances)
-
-                # re-sort indices by updated distances
-
-                indices = np.take_along_axis(indices, np.argsort(distances, axis=1), axis=1)
-
-                # store nearest neighbors to knn memmap
-
-                knns[dim_slice] = indices[:, :num_nearest_neighbors]
-
-                # print(f'knns calculated for {dim_slice.stop} / {num_chunks}')
-
-        print(f"knn saved to {knn_path}")
+    print(f"knn saved to {knn_path}")
     return knn_path, index

@@ -20,7 +20,7 @@ training_params:
   batch_size_val: 64 # batch size on validation steps
   batch_accumulation: 10 # number of samples before optimization step
 paths:
-  texts_folder: ../../data/texts_folder_dev/
+  texts_folder: ../../data/texts_folder_dev2/
   data_folder: ../../data/full_dataset/
   model_folder: ../../data/models/
   encoder_path: ../../models/CodeT5p-220M/

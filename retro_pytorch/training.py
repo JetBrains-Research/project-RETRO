@@ -172,6 +172,7 @@ class TrainingWrapper(nn.Module):
         precalculate_knn=False,
         index_params,
         max_seq_len=512,
+        use_cls_repr=False,
     ):
         super().__init__()
         assert isinstance(retro, RETRO), "retro must be instance of RETRO"
@@ -239,6 +240,7 @@ class TrainingWrapper(nn.Module):
                 chunk_memmap_path=chunks_memmap_path,
                 doc_ids_memmap_path=doc_ids_memmap_path,
                 index_params=index_params,
+                use_cls_repr=use_cls_repr,
                 num_nearest_neighbors=knn,
                 num_extra_neighbors=knn_extra_neighbors,
                 index_file=faiss_index_filename,

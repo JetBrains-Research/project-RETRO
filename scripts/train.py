@@ -21,6 +21,14 @@ args = parser.parse_args()
 no_retrieve = args.no_retrieve
 config_name = args.config
 
+## loading pathes
+print(f"Loading configs from {config_name} file")
+config = OmegaConf.load(config_name)
+paths = config.paths
+training_params = config.training_params
+retrieve_hyperparams = config.retrieve.hyperparams
+index_params = config.retrieve.hnsw_params
+
 # Use the arguments in your program
 if no_retrieve:
     print("NO retrieve during training")
@@ -29,20 +37,30 @@ else:
     print("Retrieval would be used during training")
     add_flag = ""
 
+add_flag = add_flag + "_cls"
+
+knn_path_train = os.path.join(paths.texts_folder, "knn_per_project.dat")
+knn_path_optional = os.path.join(paths.texts_folder, "knn_from_all.dat")
+if not no_retrieve:
+    config.model_hyperparameters.max_seq_len += 512
+    on_project = True
+    if on_project:
+        print("Training on the retrieval from the projects")
+        add_flag += "_conc_proj"
+        knn_path_train = os.path.join(paths.texts_folder, "knn_per_project.dat")
+        knn_path_optional = os.path.join(paths.texts_folder, "knn_from_all.dat")
+    else:
+        print("Training on the retrieval from the all dataset")
+        add_flag += "_conc_all"
+        knn_path_train = os.path.join(paths.texts_folder, "knn_from_all.dat")
+        knn_path_optional = os.path.join(paths.texts_folder, "knn_per_project.dat")
+
 """
 Training. Add flag --no-retrieve or -no if you want to train without retrieval.
 It would add '_no_retrieve' to output filenames (model and train/val loss tracking)
 """
 
 #%%
-
-## loading pathes
-print(f"Loading configs from {config_name} file")
-config = OmegaConf.load(config_name)
-paths = config.paths
-training_params = config.training_params
-retrieve_hyperparams = config.retrieve.hyperparams
-index_params = config.retrieve.hnsw_params
 
 model_name = paths.model_name + add_flag
 
@@ -56,23 +74,11 @@ f_val = open(filename_val, "a")
 with open(stats_path, "r") as f:
     stats = json.load(f)
 
-on_project = True
-if on_project:
-    print("Training on the retrieval from the projects")
-    add_flag = "_conc_proj"
-    knn_path_train = (os.path.join(paths.texts_folder, "knn_per_project.dat"),)
-    knn_path_optional = (os.path.join(paths.texts_folder, "knn_from_all.dat"),)
-else:
-    print("Training on the retrieval from the all dataset")
-    add_flag = "_conc_all"
-    knn_path_train = (os.path.join(paths.texts_folder, "knn_from_all.dat"),)
-    knn_path_optional = (os.path.join(paths.texts_folder, "knn_per_project.dat"),)
-
 # config.model_hyperparameters.dec_cross_attn_layers = eval(config.model_hyperparameters.dec_cross_attn_layers)
 
 # instantiate RETRO, fit it into the TrainingWrapper with correct settings
 # import torch
-config.model_hyperparameters.max_seq_len += 512
+
 retro = RETRO(**config.model_hyperparameters).cuda()
 # model_file = paths.model_folder + "retro_concat_last_1epoch.pth"
 # retro.load_state_dict(torch.load(model_file))
@@ -82,12 +88,6 @@ print("Freezing encoder parameters")
 for param in retro.encoder.parameters():
     param.requires_grad = False
 
-with open(paths.data_folder + "split_doc_dict.json", "r") as file:
-    split_doc_dict = json.load(file)
-with open(paths.data_folder + "split_ind_dict.json", "r") as file:
-    split_ind_dict = json.load(file)
-
-split_len_dic = {key: len(value) for key, value in split_ind_dict.items()}
 #%%
 
 wrapper_db = TrainingWrapper(
@@ -156,14 +156,16 @@ tt = time.time()
 
 saved_ind = 0
 saved_last_ind = 0
-for epoch in range(2):
-    train_dl = iter(wrapper_db.get_dataloader(split="train", batch_size=batch_size, shuffle=True, num_workers=4))
+for epoch in range(1):
+    train_dl = iter(wrapper_db.get_dataloader(split="train", batch_size=batch_size, shuffle=True))
     print(f"---------  EPOCH {epoch} ---------")
     for train_steps, (seq, ret1, ret2) in enumerate(tqdm(train_dl, total=total_items // batch_size), start=1):
 
         if no_retrieve:
             ret1 = None
-        loss = retro(seq.cuda(), retrieved=ret1.cuda(), return_loss=True)
+        else:
+            ret1 = ret1.cuda()
+        loss = retro(seq.cuda(), retrieved=ret1, return_loss=True)
         loss.backward()
 
         if train_steps % accumulate_steps == 0:
