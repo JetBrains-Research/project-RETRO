@@ -91,7 +91,7 @@ class RETRODataset(Dataset):
         self.add_continuations = add_continuations
         self.get_chunks = partial(memmap, chunk_memmap_path, dtype=np.int32, shape=chunks_shape)
         self.get_knns = partial(memmap, chunk_nn_memmap_path, dtype=np.int32, shape=knn_shape)
-        self.get_knns_option = partial(memmap, chunk_nn_memmap_path_option, dtype=np.int32, shape=knn_shape)
+        # self.get_knns_option = partial(memmap, chunk_nn_memmap_path_option, dtype=np.int32, shape=knn_shape)
         self.get_seqs = partial(memmap, seqs_memmap_path, dtype=np.int32, shape=(num_sequences,))
 
     def __len__(self):
@@ -105,7 +105,7 @@ class RETRODataset(Dataset):
         # docs_memmap_path = '../../data/texts_folder_cls/train.doc_ids.dat'
         # self.get_docs = partial(memmap, docs_memmap_path, dtype=np.int32, shape=self.num_chunks)
         # with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_knns_option() as knns_memmap_option, self.get_seqs() as seqs_memmap, self.get_docs() as docs_memmap:
-        with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_knns_option() as knns_memmap_option, self.get_seqs() as seqs_memmap:
+        with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_seqs() as seqs_memmap:
 
             begin_chunk_index = seqs_memmap[index]
             chunk_range = slice(begin_chunk_index, (begin_chunk_index + self.seq_num_chunks))
@@ -124,26 +124,20 @@ class RETRODataset(Dataset):
             # derive retrieved tokens
             knns = knns_memmap[chunk_range]
 
-            knns_option = knns_memmap_option[chunk_range]
-
             # docs_knns = docs_memmap[knns]
             # docs_chunks = docs_memmap[chunk_range]
             # retrieved_1 = knn_to_retrieved_chunks(
-            retrieved_1, retrieved_2 = (
-                knn_to_retrieved_chunks(
-                    knn,
+            retrieved = knn_to_retrieved_chunks(
+                    knns,
                     chunks_memmap,
                     add_continuations=self.add_continuations,
                     eos_id=self.eos_id,
                     num_chunks=self.num_chunks,
                 )
-                for knn in [knns, knns_option]
-            )
 
         seq_tokens_torch = torch.from_numpy(seq_tokens).long()
-        retrieved_1_torch = torch.from_numpy(retrieved_1).long()
-        retrieved_2_torch = torch.from_numpy(retrieved_2).long()
-        return seq_tokens_torch, retrieved_1_torch, retrieved_2_torch  # , docs_chunks, docs_knns,
+        retrieved_torch = torch.from_numpy(retrieved).long()
+        return seq_tokens_torch, retrieved_torch  # , docs_chunks, docs_knns,
 
 
 def split_into_chunks(seq_tokens, seq_length, pad_id=0):

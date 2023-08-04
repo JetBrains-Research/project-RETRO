@@ -25,6 +25,7 @@ transformers = "^4.30.2"
 omegaconf = "^2.3.0"
 pandas = "^2.0.3"
 faiss-cpu = "^1.7.4"
+datasets = "^2.14.0"
 
 [tool.poetry.group.dev.dependencies]  # development process dependencies
 black = "^22.3"

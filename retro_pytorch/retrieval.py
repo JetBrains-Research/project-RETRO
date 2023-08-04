@@ -2,7 +2,9 @@ from pathlib import Path
 from typing import Any
 
 import faiss
-import jsonlines
+import os
+import time
+import json
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -10,6 +12,8 @@ from einops import rearrange
 from omegaconf import OmegaConf
 from tqdm import tqdm
 from transformers import AutoTokenizer, T5ForConditionalGeneration
+import pyarrow.parquet as pq
+from collections import defaultdict
 
 from retro_pytorch.utils import memmap, reset_folder_
 
@@ -148,6 +152,8 @@ def text_folder_to_chunks_(
     chunks_memmap_path,
     seqs_memmap_path,
     doc_ids_memmap_path,
+    split_meta_path,
+    proj_doc_dict_path,
     chunk_size=64,
     seq_len=2048,
     # glob = '**/*.txt',
@@ -155,7 +161,6 @@ def text_folder_to_chunks_(
     max_chunks=1_000_000,
     max_seqs=100_000,  ### ~ total number of sequences in dataset. Sequence has a context size.
 ):
-    # paths = sorted([*Path(folder).glob(glob)])
 
     total_chunks = 0
     total_docs = 0
@@ -164,61 +169,88 @@ def text_folder_to_chunks_(
     chunks_shape = (max_chunks, chunk_size + 1)
     seqs_shape = (max_seqs,)
     doc_ids_shape = (max_chunks,)
+    file_ind = 0
+    split_metainfo = dict()
+    proj_doc_dict = defaultdict(list)
 
     with memmap(chunks_memmap_path, shape=chunks_shape, dtype=np.int32, mode="w+") as chunks_memmap, memmap(
         seqs_memmap_path, shape=seqs_shape, dtype=np.int32, mode="w+"
     ) as seqs_memmap, memmap(doc_ids_memmap_path, shape=doc_ids_shape, dtype=np.int32, mode="w+") as doc_ids_memmap:
         print("\n ----- Processing code files ------ \n")
+
         for file in data_file_paths:
             print(f"------ processing {file} -------")
-            reader = jsonlines.open(file)
+            split = os.path.splitext(os.path.basename(file))[0]
+            parquet_file = pq.ParquetFile(file)
+            num_row_groups = parquet_file.metadata.num_row_groups
 
-            for line in tqdm(reader, total=330_000, ncols=100):
-                content = line["contents"]
-                doc_id = line["doc_id"]
+            total_seqs_split = 0
 
-                # chunks - (n_chunks, chunk_len+1) it adds an extra token to the end of each chunk = first token of the next chunk.
-                # seq - [0, num_chunks_per_seq, 2*num_chunks_per_seq, 3*..., ...]
-                chunks, seq = doc_text_to_chunks_and_seq_indices(
-                    doc_text=content,
-                    chunk_size=chunk_size,
-                    seq_len=seq_len,
-                )
+            for i in tqdm(range(num_row_groups)):
+                # if i>10:
+                #     break
+                group = parquet_file.read_row_group(i).to_pandas()
 
-                doc_chunk_len = chunks.shape[0]  # number of chunks in doc
-                doc_seq_len = seq.shape[0]  # number of sequences (512) in doc
+                for index, row in group.iterrows():
+                    content = row["content"]
+                    doc_id = row["doc_id"]
+                    project_id = row["project_id"]
+                    proj_doc_dict[project_id].append(doc_id)
 
-                # adding chunks, seqs and doc_ids
-                # doc_ids - is just a position of the file in a sequence
-                # seqs_memmap - contains chunk ids of the beggining of each sequence.
-                # doc_ids_memmap - doc_id of each chunk
 
-                chunks_memmap[total_chunks : (total_chunks + doc_chunk_len)] = chunks.numpy()
-                seqs_memmap[total_seqs : (total_seqs + doc_seq_len)] = seq.numpy() + total_chunks
-                doc_ids_memmap[total_chunks : (total_chunks + doc_chunk_len)] = np.full((doc_chunk_len,), doc_id)
+                    # chunks - (n_chunks, chunk_len+1) it adds an extra token to the end of each chunk = first token of the next chunk.
+                    # seq - [0, num_chunks_per_seq, 2*num_chunks_per_seq, 3*..., ...]
+                    chunks, seq = doc_text_to_chunks_and_seq_indices(
+                        doc_text=content,
+                        chunk_size=chunk_size,
+                        seq_len=seq_len,
+                    )
 
-                total_chunks += doc_chunk_len
-                total_seqs += doc_seq_len
-                total_docs += 1
+                    doc_chunk_len = chunks.shape[0]  # number of chunks in doc
+                    doc_seq_len = seq.shape[0]  # number of sequences (512) in doc
+
+                    # adding chunks, seqs and doc_ids
+                    # doc_ids - is just a position of the file in a sequence
+                    # seqs_memmap - contains chunk ids of the beggining of each sequence.
+                    # doc_ids_memmap - doc_id of each chunk
+
+                    chunks_memmap[total_chunks : (total_chunks + doc_chunk_len)] = chunks.numpy()
+                    seqs_memmap[total_seqs : (total_seqs + doc_seq_len)] = seq.numpy() + total_chunks
+                    doc_ids_memmap[total_chunks : (total_chunks + doc_chunk_len)] = np.full((doc_chunk_len,), doc_id)
+
+                    total_chunks += doc_chunk_len
+                    total_seqs += doc_seq_len
+                    total_docs += 1
+
+                    total_seqs_split += doc_seq_len
+
+            split_dict = dict({'split': split, 'split size in seqs': total_seqs_split, 'first sequence index': total_seqs - total_seqs_split})
+            split_metainfo[file_ind] = split_dict
+            file_ind += 1
+
+    with open(split_meta_path, "w") as file:
+        json.dump(split_metainfo, file)
+
+    for key in proj_doc_dict:
+        proj_doc_dict[key].sort()
+
+    with open(proj_doc_dict_path, "w") as file:
+        json.dump(proj_doc_dict, file)
 
     return dict(chunks=total_chunks, docs=total_docs, seqs=total_seqs, chunk_size=chunk_size)
 
-
 # embedding function
-
 
 @torch.no_grad()
 def embed(token_ids, return_cls_repr=False, eps=1e-8, pad_id=0):
     global PAD_TOKEN, MODEL
-    model = MODEL  # get_embedder()
-    model.eval()
     mask = token_ids != pad_id
 
     if torch.cuda.is_available():
         token_ids = token_ids.cuda()
         mask = mask.cuda()
 
-    hidden_state = model(token_ids, attention_mask=mask).last_hidden_state
+    hidden_state = MODEL(token_ids, attention_mask=mask).last_hidden_state
 
     if return_cls_repr:
         return hidden_state[:, 0]  # return [cls] as representation
@@ -325,6 +357,128 @@ def build_compound_index(
 
     return index
 
+def calculate_per_project_knn(
+    doc_ids_memmap_path,
+    embedding_path,
+    index_params,
+    knn_path,
+    proj_doc_dict_path,
+    num_chunks,
+    num_nearest_neighbors=2,
+    num_extra_neighbours=100,
+):
+
+    embed_shape = (num_chunks, MODEL_DIM)
+    doc_ids = np.memmap(doc_ids_memmap_path, shape=(num_chunks,), dtype=np.int32, mode="r")
+    doc_ids = np.array(doc_ids)
+    embeddings_all = np.memmap(embedding_path, shape=embed_shape, dtype=np.float32, mode="r")
+
+    with open(proj_doc_dict_path, "r") as file:
+        proj_doc_dict = json.load(file)
+
+    error_rates = []
+    tt = time.time()
+    model_dim = embeddings_all.shape[1]
+
+    with memmap(knn_path, shape=(num_chunks, num_nearest_neighbors), dtype=np.int32, mode="w+") as knns:
+
+        for proj_id in tqdm(proj_doc_dict.keys()):
+
+            doc_list = np.array(proj_doc_dict[str(proj_id)])
+            indices = np.where(np.isin(doc_ids, doc_list))[0]
+            query_doc_ids = doc_ids[indices]
+            embeddings = embeddings_all[indices]
+            index = build_compound_index(
+                embeddings, index_file="", index_params=index_params, d=model_dim, verbose=False, save_to_file=False
+            )
+
+            ## ensures that there no retrieve from the same document
+            for n_extra in [num_extra_neighbours, 3 * num_extra_neighbours, 10 * num_extra_neighbours]:
+
+                dist, ind = index.search(embeddings, k=num_nearest_neighbors + n_extra)
+                l = max(len(dist), 1)
+                error_rate = sum(dist[:, 0]) / l
+                error_rates.append([proj_id, error_rate])
+                dist = dist[:, 1:]
+                ind = ind[:, 1:]
+
+                doc_ids_selected = query_doc_ids[ind]
+                neighbor_from_same_doc = query_doc_ids[..., None] == doc_ids_selected
+                ind = np.where(neighbor_from_same_doc, -1, ind)
+                dist = np.where(neighbor_from_same_doc, 1e3, dist)
+                ind = np.take_along_axis(ind, np.argsort(dist, axis=1), axis=1)
+
+                ind = ind[:, :num_nearest_neighbors]
+
+                doc_ids_selected = query_doc_ids[ind]
+                neighbor_from_same_doc = query_doc_ids[..., None] == doc_ids_selected
+                if np.sum(neighbor_from_same_doc) == 0:
+                    break
+
+            if np.sum(neighbor_from_same_doc) > 0:
+                print(f"Retrieve from the same doc!, project id = {proj_id}")
+            indices_selected = indices[ind]
+
+            knns[indices] = indices_selected
+
+    print(f"KNNs are saved into {knn_path}")
+    print(f"Time used = {(time.time() - tt):.2f}")
+
+    error_rates = np.array(error_rates)[:, 1].astype(float)
+    error_rates_av = np.mean(error_rates[error_rates > 0])
+
+    print(f"Number of nonzero error rates  = {np.sum(error_rates>0)}")
+    print(f"Average nonzero error rate  = {error_rates_av}")
+    print(f"Max error rate  = {np.max(error_rates)}")
+
+def test_knn(
+    embedding_path,
+    knn_path,
+    num_chunks,
+    num_nearest_neighbors=2,
+    n_samples=50_000,
+):
+
+    embed_shape = (num_chunks, MODEL_DIM)
+    embeddings_all = np.memmap(embedding_path, shape=embed_shape, dtype=np.float32, mode="r")
+
+    knn_map = np.memmap(knn_path, shape=(num_chunks, num_nearest_neighbors), dtype=np.int32, mode="r")
+    knn_map = np.array(knn_map)
+
+
+    random_ind = np.random.randint(num_chunks, size=n_samples)
+
+    print(f"Testing on {n_samples} samples")
+
+    neighb_ind = knn_map[random_ind]
+    mask = np.any(neighb_ind != [0, 0], axis=1)
+    neighb_ind = neighb_ind[mask]
+    if not len(neighb_ind) == n_samples:
+        print("Some indices are missing")
+    emb_query = embeddings_all[random_ind][mask]
+    neighb_emb = embeddings_all[neighb_ind]
+    neighb_emb_wrong = embeddings_all[neighb_ind - 30_000]
+
+    dist_good = np.linalg.norm(neighb_emb - emb_query[:, np.newaxis, :], axis=-1)
+    dist_wrong = np.linalg.norm(neighb_emb_wrong - emb_query[:, np.newaxis, :], axis=-1)
+
+    #%%
+
+    dist_good_1 = dist_good[:, 0]
+    dist_good_2 = dist_good[:, 1]
+    dist_wrong = dist_wrong[:, 0]
+
+    mean_1 = np.mean(dist_good_1[dist_good_1 > 0])
+    mean_2 = np.mean(dist_good_2[dist_good_2 > 0])
+    mean_wrong = np.mean(dist_wrong[dist_good_1 > 0])
+    std_1 = np.std(dist_good_1[dist_good_1 > 0])
+    std_2 = np.std(dist_good_2[dist_good_2 > 0])
+    std_wrong = np.std(dist_wrong[dist_good_1 > 0])
+
+
+    print(f"Mean distance for best neighbours        {mean_1:.2f} +- {std_1:.2f}")
+    print(f"Mean distance for second best neighbours {mean_2:.2f} +- {std_2:.2f}")
+    print(f"Mean distance for wrong samples          {mean_wrong:.2f} +- {std_wrong:.2f}")
 
 def index_embeddings(
     embedding_path,
@@ -384,15 +538,17 @@ def chunks_to_index_and_embed(
         print("Found index file. Reading")
         index = faiss_read_index(index_path)
     else:
-        index = index_embeddings(
-            # embeddings_folder=EMBEDDING_TMP_SUBFOLDER,
-            embedding_path=embedding_path,
-            index_folder=index_folder,
-            index_file=index_file,
-            num_chunks=num_chunks,
-            index_params=index_params,
-            # **index_kwargs,
-        )
+
+        # index = index_embeddings(
+        #     # embeddings_folder=EMBEDDING_TMP_SUBFOLDER,
+        #     embedding_path=embedding_path,
+        #     index_folder=index_folder,
+        #     index_file=index_file,
+        #     num_chunks=num_chunks,
+        #     index_params=index_params,
+        #     # **index_kwargs,
+        # )
+        index = None
 
     embeddings = np.memmap(embedding_path, shape=embed_shape, dtype=np.float32, mode="r")
     return index, embeddings

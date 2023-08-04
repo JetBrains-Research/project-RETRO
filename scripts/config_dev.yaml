@@ -1,6 +1,8 @@
 retrieve:
-  hnsw_params: {m: 8, efCons: 8, efSearch: 8, verbose: True}
+  #hnsw_params: {m: 8, efCons: 8, efSearch: 8, verbose: True}
+  hnsw_params: {m: 256, efCons: 40, efSearch: 16, verbose: True}
   hyperparams: {n_knn: 2, knn_extra_neighbors: 100} # n_knn - number of nearest members to retrieve during pipeline
+  chunk_size: 64
 model_hyperparameters:
   max_seq_len: 512  # max sequence length
   enc_dim: 896  # encoder model dimension
@@ -21,7 +23,7 @@ training_params:
   batch_accumulation: 10 # number of samples before optimization step
 paths:
   texts_folder: ../../data/texts_folder_dev2/
-  data_folder: ../../data/full_dataset/
+  data_folder: ../../data/Starcoder/
   model_folder: ../../data/models/
   encoder_path: ../../models/CodeT5p-220M/
   out_folder: ../out_dir/
@@ -33,5 +35,6 @@ paths:
   val_data_file: val.jsonl
   out_filename_train: losses_train_dev
   out_filename_val: losses_val_dev
+  processed_stats_filename: processed-stats.json
 messages:
   embedder_init: ---- Using CodeT5p-220M model for embedding----

@@ -17,9 +17,13 @@ from retro_pytorch.retrieval import (
     PAD_TOKEN,
     SOS_ID,
     VOCAB_SIZE,
+    MODEL_DIM,
     chunks_to_precalculated_knn_,
     embed,
     text_folder_to_chunks_,
+    chunks_to_embeddings_,
+    calculate_per_project_knn,
+    test_knn,
 )
 from retro_pytorch.retro_pytorch import RETRO
 from retro_pytorch.utils import is_true_env_flag, memmap
@@ -161,9 +165,10 @@ class TrainingWrapper(nn.Module):
         chunks_memmap_path="./train.chunks.dat",
         seqs_memmap_path="./train.seq.dat",
         doc_ids_memmap_path="./train.doc_ids.dat",
-        knn_memmap_path="./knn_from_all.dat",
+        knn_memmap_path="./knn_from_project.dat",
         knn_memmap_path_option="./knn_from_all.dat",
         split_meta_path="./split_meta_dict.json",
+        proj_doc_dict_path = 'proj_doc_dict.json',
         max_chunks=1_000_000,
         max_seqs=100_000,
         knn_extra_neighbors=100,
@@ -177,9 +182,6 @@ class TrainingWrapper(nn.Module):
         super().__init__()
         assert isinstance(retro, RETRO), "retro must be instance of RETRO"
         self.retro = retro
-
-        with open(split_meta_path, "r") as file:
-            self.split_meta_info = json.load(file)
 
         force_reprocess = is_true_env_flag("REPROCESS")
 
@@ -199,6 +201,8 @@ class TrainingWrapper(nn.Module):
                 chunks_memmap_path=chunks_memmap_path,
                 seqs_memmap_path=seqs_memmap_path,
                 doc_ids_memmap_path=doc_ids_memmap_path,
+                split_meta_path = split_meta_path,
+                proj_doc_dict_path = proj_doc_dict_path,
                 chunk_size=chunk_size,
                 seq_len=max_seq_len,
                 max_chunks=max_chunks,
@@ -209,6 +213,9 @@ class TrainingWrapper(nn.Module):
         else:
             print(f"found previously processed at {str(stats_path)}")
             self.stats = json.loads(stats_path.read_text())
+
+        with open(split_meta_path, "r") as file:
+            self.split_meta_info = json.load(file)
 
         # get number of chunks and number of sequences
 
@@ -227,30 +234,55 @@ class TrainingWrapper(nn.Module):
             chunks_memmap_path, dtype=np.int32, mode="r", shape=(self.num_chunks, chunk_size + 1)
         )
 
+
         # calculate knn memmap path and get the faiss index
         # todo - make sure if faiss_index_filename is found, do not reprocess unless flag is given
 
         if not os.path.exists(knn_memmap_path):
 
+            embedding_path = f"{chunks_memmap_path}.embedded"
+            embed_shape = (self.num_chunks, MODEL_DIM)
+            if Path(embedding_path).exists():
+                print(
+                    f"----- \n Embeddings file exist: {embedding_path} \n proceeding without creating new embeddings \n ------"
+                )
+            else:
+                chunks_to_embeddings_(
+                    num_chunks=self.num_chunks,
+                    chunk_size=chunk_size,
+                    chunks_memmap_path=chunks_memmap_path,
+                    embeddings_memmap_path=embedding_path,
+                    use_cls_repr=use_cls_repr,
+                    batch_size=1024,
+                    embed_dim=MODEL_DIM,
+                )
+
             print("KNN file is not found. Creating or Loading index")
+            calculate_per_project_knn(doc_ids_memmap_path, embedding_path, index_params, knn_memmap_path, proj_doc_dict_path,
+                                      self.num_chunks)
+            test_knn(embedding_path, knn_memmap_path, self.num_chunks, num_nearest_neighbors=knn, n_samples=50_000)
 
-            knn_memmap_path, faiss_index = chunks_to_precalculated_knn_(
-                num_chunks=self.num_chunks,
-                chunk_size=chunk_size,
-                chunk_memmap_path=chunks_memmap_path,
-                doc_ids_memmap_path=doc_ids_memmap_path,
-                index_params=index_params,
-                use_cls_repr=use_cls_repr,
-                num_nearest_neighbors=knn,
-                num_extra_neighbors=knn_extra_neighbors,
-                index_file=faiss_index_filename,
-                force_reprocess=force_reprocess,
-                precalculate_knn=precalculate_knn,
-            )
+            # TODO incorporate per project KNN precalculation into the module !
 
-            self.chunk_size = chunk_size
-            self.max_seq_len = self.seq_len
+            #knn_memmap_path, faiss_index = chunks_to_precalculated_knn_(
+            # chunks_to_precalculated_knn_(
+            #     num_chunks=self.num_chunks,
+            #     chunk_size=chunk_size,
+            #     chunk_memmap_path=chunks_memmap_path,
+            #     doc_ids_memmap_path=doc_ids_memmap_path,
+            #     index_params=index_params,
+            #     use_cls_repr=use_cls_repr,
+            #     num_nearest_neighbors=knn,
+            #     num_extra_neighbors=knn_extra_neighbors,
+            #     index_file=faiss_index_filename,
+            #     force_reprocess=force_reprocess,
+            #     precalculate_knn=precalculate_knn,
+            # )
 
+### TODO first function is used in generation. Second - for fetching from common index
+### I do not use fetch_knn_chunks_fn, so for a while I pass faiss_index = None
+
+            faiss_index = None
             self.fetch_knn_chunks_fn = partial(
                 knn_chunks_from_seq_chunks,
                 knn=knn,
@@ -261,75 +293,77 @@ class TrainingWrapper(nn.Module):
                 doc_except=None,
             )
 
-            self.fetch_knn_chunks_check_fn = partial(
-                knn_chunks_from_seq_chunks,
-                knn=knn,
-                chunk_size=chunk_size,
-                num_chunks=self.num_chunks,
-                chunks_memmap_path=chunks_memmap_path,
-                faiss_index=faiss_index,
-                pad_with_os=False,
-            )
+            # self.fetch_knn_chunks_check_fn = partial(
+            #     knn_chunks_from_seq_chunks,
+            #     knn=knn,
+            #     chunk_size=chunk_size,
+            #     num_chunks=self.num_chunks,
+            #     chunks_memmap_path=chunks_memmap_path,
+            #     faiss_index=faiss_index,
+            #     pad_with_os=False,
+            # )
         else:
             print(f"Found KNN file at {knn_memmap_path}")
 
-    def fetch_neighbours(self, seq: torch.Tensor, doc_except: torch.Tensor) -> torch.Tensor:
-        # global neighbor_doc_ids, neighbor_from_same_doc, distances
+## TODO in retrieve from project setup there is no option of fetching from some common index
 
-        b, seq_len = seq.shape
-        past_seq_chunks = rearrange(seq[:, :-1], "b (n c) -> (b n) c", c=self.chunk_size)
-        ### chunks, that have only PAD_TOKEN are marked, so that retrieve results to be put to PAD_TOKEN too.
-        zero_ind = torch.all(past_seq_chunks == PAD_TOKEN, dim=-1)
-
-        sos = SOS_ID * torch.ones(
-            (past_seq_chunks.shape[0], 1), dtype=torch.bool, device=seq.device
-        )  ## TODO dtype=torch.bool
-        past_seq_chunks = torch.cat((sos, past_seq_chunks), dim=1)
-
-        total_neighbors_to_fetch = self.knn_extra_neighbors + self.knn + 1
-        distances, indices = self.fetch_knn_chunks_check_fn(
-            past_seq_chunks,
-            doc_except=doc_except,
-            knn=total_neighbors_to_fetch,
-        )
-
-        with memmap(
-            self.chunks_memmap_path,
-            dtype=np.int32,
-            shape=(self.num_chunks + 1, self.chunk_size + 1),
-            mode="r",
-        ) as chunk_memmap, memmap(
-            self.doc_ids_memmap_path, shape=(self.num_chunks,), dtype=np.int32, mode="r"
-        ) as doc_ids_storage:
-            # print_file = open('output.txt', 'a')
-            # mask out any neighbors that belong to the same document to -1
-            neighbor_doc_ids = doc_ids_storage[indices]
-            # print(neighbor_doc_ids, file = print_file)
-            neighbor_from_same_doc = doc_except.flatten().numpy()[..., np.newaxis] == neighbor_doc_ids
-            # print(neighbor_from_same_doc, file = print_file)
-            # print(distances, file = print_file)
-            #####indices = np.where(neighbor_from_same_doc, -1, indices)
-            distances = np.where(neighbor_from_same_doc, 1e3, distances)
-            # print(distances, file = print_file)
-
-            #!!! TODO check that there is retrieved chunks from another docs
-
-            # # re-sort indices by updated distances
-            indices = np.take_along_axis(indices, np.argsort(distances, axis=1), axis=1)
-
-            knn_chunks = knn_to_retrieved_chunks(
-                indices[:, : self.knn],
-                chunk_memmap,
-                add_continuations=True,
-                num_chunks=self.num_chunks,
-            )
-
-            knn_chunks_torch = torch.from_numpy(knn_chunks).cuda()
-            knn_chunks_torch[zero_ind] = PAD_TOKEN
-
-            knn_chunks_torch = rearrange(knn_chunks_torch, "(b n) k c -> b n k c", b=b)
-
-            return knn_chunks_torch
+    # def fetch_neighbours(self, seq: torch.Tensor, doc_except: torch.Tensor) -> torch.Tensor:
+    #     # global neighbor_doc_ids, neighbor_from_same_doc, distances
+    #
+    #     b, seq_len = seq.shape
+    #     past_seq_chunks = rearrange(seq[:, :-1], "b (n c) -> (b n) c", c=self.chunk_size)
+    #     ### chunks, that have only PAD_TOKEN are marked, so that retrieve results to be put to PAD_TOKEN too.
+    #     zero_ind = torch.all(past_seq_chunks == PAD_TOKEN, dim=-1)
+    #
+    #     sos = SOS_ID * torch.ones(
+    #         (past_seq_chunks.shape[0], 1), dtype=torch.bool, device=seq.device
+    #     )  ## TODO dtype=torch.bool
+    #     past_seq_chunks = torch.cat((sos, past_seq_chunks), dim=1)
+    #
+    #     total_neighbors_to_fetch = self.knn_extra_neighbors + self.knn + 1
+    #     distances, indices = self.fetch_knn_chunks_check_fn(
+    #         past_seq_chunks,
+    #         doc_except=doc_except,
+    #         knn=total_neighbors_to_fetch,
+    #     )
+    #
+    #     with memmap(
+    #         self.chunks_memmap_path,
+    #         dtype=np.int32,
+    #         shape=(self.num_chunks + 1, self.chunk_size + 1),
+    #         mode="r",
+    #     ) as chunk_memmap, memmap(
+    #         self.doc_ids_memmap_path, shape=(self.num_chunks,), dtype=np.int32, mode="r"
+    #     ) as doc_ids_storage:
+    #         # print_file = open('output.txt', 'a')
+    #         # mask out any neighbors that belong to the same document to -1
+    #         neighbor_doc_ids = doc_ids_storage[indices]
+    #         # print(neighbor_doc_ids, file = print_file)
+    #         neighbor_from_same_doc = doc_except.flatten().numpy()[..., np.newaxis] == neighbor_doc_ids
+    #         # print(neighbor_from_same_doc, file = print_file)
+    #         # print(distances, file = print_file)
+    #         #####indices = np.where(neighbor_from_same_doc, -1, indices)
+    #         distances = np.where(neighbor_from_same_doc, 1e3, distances)
+    #         # print(distances, file = print_file)
+    #
+    #         #!!! TODO check that there is retrieved chunks from another docs
+    #
+    #         # # re-sort indices by updated distances
+    #         indices = np.take_along_axis(indices, np.argsort(distances, axis=1), axis=1)
+    #
+    #         knn_chunks = knn_to_retrieved_chunks(
+    #             indices[:, : self.knn],
+    #             chunk_memmap,
+    #             add_continuations=True,
+    #             num_chunks=self.num_chunks,
+    #         )
+    #
+    #         knn_chunks_torch = torch.from_numpy(knn_chunks).cuda()
+    #         knn_chunks_torch[zero_ind] = PAD_TOKEN
+    #
+    #         knn_chunks_torch = rearrange(knn_chunks_torch, "(b n) k c -> b n k c", b=b)
+    #
+    #         return knn_chunks_torch
 
     def fetch_random_chunk(self, seq, doc_except=None):
 
@@ -423,7 +457,7 @@ class TrainingWrapper(nn.Module):
 
         # sampling loop
 
-        for i in range(start_seq_len - 1, self.max_seq_len):
+        for i in range(start_seq_len - 1, self.seq_len):
             logits = self.retro(out, retrieved=retrieved)
             logits = logits[:, i]
 
@@ -461,7 +495,7 @@ class TrainingWrapper(nn.Module):
                 knn_chunks = rearrange(knn_chunks, "b k r -> b 1 k r")
                 retrieved = safe_cat(retrieved, knn_chunks, dim=1)
 
-                print(f"retrieved at {curr_seq_len} / {self.max_seq_len}")
+                print(f"retrieved at {curr_seq_len} / {self.seq_len}")
 
         return out
 

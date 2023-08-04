@@ -45,22 +45,3 @@ for key in proj_doc_dict:
 
 with open(paths.data_folder + "proj_doc_dict.json", "w") as file:
     json.dump(proj_doc_dict, file)
-# doc_proj_dict = dict()
-# for project_id, doc_ids in proj_doc_dict.items():
-#     for doc_id in doc_ids:
-#         doc_proj_dict[doc_id] = project_id
-
-# proj_size_dict = dict()
-# for project_id in proj_doc_dict.keys():
-#     proj_size_dict[project_id] = len(proj_doc_dict[project_id])
-
-# %%
-
-
-# with open(paths.data_folder + "doc_proj_dict.json", "w") as file:
-#     json.dump(doc_proj_dict, file)
-
-# with open(paths.data_folder + "proj_size_dict.json", "w") as file:
-#     json.dump(proj_size_dict, file)
-
-# %%

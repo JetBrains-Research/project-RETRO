@@ -37,24 +37,24 @@ else:
     print("Retrieval would be used during training")
     add_flag = ""
 
-add_flag = add_flag + "_cls"
-
-knn_path_train = os.path.join(paths.texts_folder, "knn_per_project.dat")
-knn_path_optional = os.path.join(paths.texts_folder, "knn_from_all.dat")
+add_flag = add_flag + "_star"
+add_flag += "_conc_proj"
+knn_path_train = os.path.join(paths.texts_folder, "knn_from_project.dat")
+# knn_path_optional = os.path.join(paths.texts_folder, "knn_from_all.dat")
 if not no_retrieve:
-    config.model_hyperparameters.max_seq_len += 512
+    config.model_hyperparameters.max_seq_len = 2*config.model_hyperparameters.max_seq_len
     on_project = True
-    if on_project:
-        print("Training on the retrieval from the projects")
-        add_flag += "_conc_proj"
-        knn_path_train = os.path.join(paths.texts_folder, "knn_per_project.dat")
-        knn_path_optional = os.path.join(paths.texts_folder, "knn_from_all.dat")
-    else:
-        print("Training on the retrieval from the all dataset")
-        add_flag += "_conc_all"
-        knn_path_train = os.path.join(paths.texts_folder, "knn_from_all.dat")
-        knn_path_optional = os.path.join(paths.texts_folder, "knn_per_project.dat")
+    print("Training on the retrieval from the projects")
+    # knn_path_train = os.path.join(paths.texts_folder, "knn_per_project.dat")
+    # knn_path_optional = os.path.join(paths.texts_folder, "knn_from_all.dat")
+    # else:
+    #     print("Training on the retrieval from the all dataset")
+    #     add_flag += "_conc_all"
+    #     knn_path_train = os.path.join(paths.texts_folder, "knn_from_all.dat")
+    #     knn_path_optional = os.path.join(paths.texts_folder, "knn_per_project.dat")
 
+
+#add_flag += "_dev"
 """
 Training. Add flag --no-retrieve or -no if you want to train without retrieval.
 It would add '_no_retrieve' to output filenames (model and train/val loss tracking)
@@ -68,7 +68,7 @@ train_data_path = os.path.join(paths.data_folder, paths.train_data_file)
 val_data_path = os.path.join(paths.data_folder, paths.val_data_file)
 filename_train = os.path.join(paths.out_folder, paths.out_filename_train + add_flag + ".txt")
 filename_val = os.path.join(paths.out_folder, paths.out_filename_val + add_flag + ".txt")
-stats_path = os.path.join(paths.texts_folder, "processed-stats.json")
+stats_path = os.path.join(paths.texts_folder, paths.processed_stats_filename)
 f_train = open(filename_train, "a")
 f_val = open(filename_val, "a")
 with open(stats_path, "r") as f:
@@ -93,7 +93,7 @@ for param in retro.encoder.parameters():
 wrapper_db = TrainingWrapper(
     retro=retro,  # path to retro instance
     knn=retrieve_hyperparams.n_knn,  # knn (2 in paper was sufficient)
-    chunk_size=stats["chunk_size"],  # chunk size (64 in paper)
+    chunk_size=config.retrieve.chunk_size,  # chunk size (64 in paper)
     documents_path=paths.data_folder,  # path to folder of text
     data_file_paths=[],
     chunks_memmap_path=os.path.join(paths.texts_folder, "train.chunks.dat"),  # path to chunks
@@ -103,7 +103,7 @@ wrapper_db = TrainingWrapper(
     ),  # path to document ids per chunk (used for filtering neighbors belonging to same document)
     processed_stats_json_path=stats_path,
     knn_memmap_path=knn_path_train,  # used for the training
-    knn_memmap_path_option=knn_path_optional,  ## used for additional validaton purposes
+    knn_memmap_path_option=None,# knn_path_optional,  ## used for additional validaton purposes
     split_meta_path=os.path.join(paths.texts_folder, "split_meta_dict.json"),
     knn_extra_neighbors=retrieve_hyperparams.knn_extra_neighbors,  # num extra neighbors to fetch
     precalculate_knn=False,
@@ -119,7 +119,9 @@ num_val = training_params.num_val  # number of validation steps
 batch_size = training_params.batch_size
 batch_size_val = training_params.batch_size_val
 batch_accumulation = training_params.batch_accumulation
-total_items = 1367016
+
+train_dl = wrapper_db.get_dataloader(split="train", batch_size=1)
+total_items = len(train_dl)
 
 accumulate_steps = (
     batch_accumulation // batch_size if batch_accumulation % batch_size == 0 else batch_accumulation // batch_size + 1
@@ -159,13 +161,13 @@ saved_last_ind = 0
 for epoch in range(1):
     train_dl = iter(wrapper_db.get_dataloader(split="train", batch_size=batch_size, shuffle=True))
     print(f"---------  EPOCH {epoch} ---------")
-    for train_steps, (seq, ret1, ret2) in enumerate(tqdm(train_dl, total=total_items // batch_size), start=1):
+    for train_steps, (seq, ret) in enumerate(tqdm(train_dl), start=1):
 
         if no_retrieve:
-            ret1 = None
+            ret = None
         else:
-            ret1 = ret1.cuda()
-        loss = retro(seq.cuda(), retrieved=ret1, return_loss=True)
+            ret = ret.cuda()
+        loss = retro(seq.cuda(), retrieved=ret, return_loss=True)
         loss.backward()
 
         if train_steps % accumulate_steps == 0:

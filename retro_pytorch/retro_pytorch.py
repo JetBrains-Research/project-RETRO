@@ -635,14 +635,17 @@ class RETRO(nn.Module):
 
     def forward(self, seq, retrieved=None, return_loss=False):
 
+        seq_len = seq.size(1) - 1
+
         if exists(retrieved):
             retrieved = torch.reshape(
                 retrieved[:, :, 0, 64:], (retrieved.size(0), retrieved.size(1) * retrieved.size(-1) // 2)
             )
             seq = torch.concat((retrieved, seq), dim=-1)
-            seq_len = 512  # TODO look up, why I added this variable.
+            pos_emb = self.pos_emb(torch.arange(self.seq_len, device=seq.device))
         else:
-            seq_len = 512
+            pos_emb = self.pos_emb(torch.arange(self.seq_len - seq_len, self.seq_len, device=seq.device))
+            torch.arange(self.seq_len - seq_len, self.seq_len, device=seq.device)
 
         seq, labels = seq[:, :-1], seq[:, -seq_len:]
         # embed sequence and cut it
@@ -650,8 +653,7 @@ class RETRO(nn.Module):
         embed = embed[:, : self.seq_len]
 
         # get absolute positional embedding
-
-        pos_emb = self.pos_emb(torch.arange(embed.shape[1], device=embed.device))
+        # pos_emb = self.pos_emb(torch.arange(embed.shape[1], device=embed.device))
         pos_emb = rearrange(pos_emb, "n d -> 1 n d")
         embed = embed + pos_emb
 
