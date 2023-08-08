@@ -14,16 +14,16 @@ from retro_pytorch.data import RETRODataset, knn_to_retrieved_chunks
 from retro_pytorch.optimizer import get_optimizer
 from retro_pytorch.retrieval import (
     EOS_ID,
+    MODEL_DIM,
     PAD_TOKEN,
     SOS_ID,
     VOCAB_SIZE,
-    MODEL_DIM,
+    calculate_per_project_knn,
+    chunks_to_embeddings_,
     chunks_to_precalculated_knn_,
     embed,
-    text_folder_to_chunks_,
-    chunks_to_embeddings_,
-    calculate_per_project_knn,
     test_knn,
+    text_folder_to_chunks_,
 )
 from retro_pytorch.retro_pytorch import RETRO
 from retro_pytorch.utils import is_true_env_flag, memmap
@@ -168,9 +168,9 @@ class TrainingWrapper(nn.Module):
         knn_memmap_path="./knn_from_project.dat",
         knn_memmap_path_option="./knn_from_all.dat",
         split_meta_path="./split_meta_dict.json",
-        proj_doc_dict_path = 'proj_doc_dict.json',
-        doc_proj_dict_path = 'doc_proj_dict.json',
-        doc_bin_dict_path = 'doc_bin_dict_path',
+        proj_doc_dict_path="proj_doc_dict.json",
+        doc_proj_dict_path="doc_proj_dict.json",
+        doc_bin_dict_path="doc_bin_dict_path",
         max_chunks=1_000_000,
         max_seqs=100_000,
         knn_extra_neighbors=100,
@@ -203,10 +203,10 @@ class TrainingWrapper(nn.Module):
                 chunks_memmap_path=chunks_memmap_path,
                 seqs_memmap_path=seqs_memmap_path,
                 doc_ids_memmap_path=doc_ids_memmap_path,
-                split_meta_path = split_meta_path,
-                proj_doc_dict_path = proj_doc_dict_path,
-                doc_proj_dict_path = doc_proj_dict_path,
-                doc_bin_dict_path = doc_bin_dict_path,
+                split_meta_path=split_meta_path,
+                proj_doc_dict_path=proj_doc_dict_path,
+                doc_proj_dict_path=doc_proj_dict_path,
+                doc_bin_dict_path=doc_bin_dict_path,
                 chunk_size=chunk_size,
                 seq_len=max_seq_len,
                 max_chunks=max_chunks,
@@ -238,7 +238,6 @@ class TrainingWrapper(nn.Module):
             chunks_memmap_path, dtype=np.int32, mode="r", shape=(self.num_chunks, chunk_size + 1)
         )
 
-
         # calculate knn memmap path and get the faiss index
         # todo - make sure if faiss_index_filename is found, do not reprocess unless flag is given
 
@@ -262,13 +261,14 @@ class TrainingWrapper(nn.Module):
                 )
 
             print("KNN file is not found. Creating or Loading index")
-            calculate_per_project_knn(doc_ids_memmap_path, embedding_path, index_params, knn_memmap_path, proj_doc_dict_path,
-                                      self.num_chunks)
+            calculate_per_project_knn(
+                doc_ids_memmap_path, embedding_path, index_params, knn_memmap_path, proj_doc_dict_path, self.num_chunks
+            )
             test_knn(embedding_path, knn_memmap_path, self.num_chunks, num_nearest_neighbors=knn, n_samples=50_000)
 
             # TODO incorporate per project KNN precalculation into the module !
 
-            #knn_memmap_path, faiss_index = chunks_to_precalculated_knn_(
+            # knn_memmap_path, faiss_index = chunks_to_precalculated_knn_(
             # chunks_to_precalculated_knn_(
             #     num_chunks=self.num_chunks,
             #     chunk_size=chunk_size,
@@ -283,8 +283,8 @@ class TrainingWrapper(nn.Module):
             #     precalculate_knn=precalculate_knn,
             # )
 
-### TODO first function is used in generation. Second - for fetching from common index
-### I do not use fetch_knn_chunks_fn, so for a while I pass faiss_index = None
+            ### TODO first function is used in generation. Second - for fetching from common index
+            ### I do not use fetch_knn_chunks_fn, so for a while I pass faiss_index = None
 
             faiss_index = None
             self.fetch_knn_chunks_fn = partial(
@@ -309,7 +309,7 @@ class TrainingWrapper(nn.Module):
         else:
             print(f"Found KNN file at {knn_memmap_path}")
 
-## TODO in retrieve from project setup there is no option of fetching from some common index
+    ## TODO in retrieve from project setup there is no option of fetching from some common index
 
     # def fetch_neighbours(self, seq: torch.Tensor, doc_except: torch.Tensor) -> torch.Tensor:
     #     # global neighbor_doc_ids, neighbor_from_same_doc, distances
@@ -369,7 +369,7 @@ class TrainingWrapper(nn.Module):
     #
     #         return knn_chunks_torch
 
-    def fetch_random_chunk(self, seq, ret = None):
+    def fetch_random_chunk(self, seq, ret=None):
 
         """
         fetches random chunk from database
@@ -383,7 +383,7 @@ class TrainingWrapper(nn.Module):
         batch_shape = (batch_size, seq_size, self.knn, 2 * self.chunk_size)
         return torch.tensor(selected_pairs.reshape(batch_shape)).cuda()
 
-    def fetch_none(self, seq, ret = None):
+    def fetch_none(self, seq, ret=None):
         return None
 
     def fetch_self_ret(self, seq, ret=None):
@@ -520,7 +520,7 @@ class TrainingWrapper(nn.Module):
 
         return out
 
-    def get_dataloader(self, split, return_docs = False, **kwargs):
+    def get_dataloader(self, split, return_docs=False, **kwargs):
 
         # retro dataset
         self.ds = RETRODataset(
@@ -533,7 +533,7 @@ class TrainingWrapper(nn.Module):
             chunk_nn_memmap_path=self.knn_memmap_path,
             chunk_nn_memmap_path_option=self.knn_memmap_path_option,
             seqs_memmap_path=self.seqs_memmap_path,
-            doc_ids_memmap_path = self.doc_ids_memmap_path,
+            doc_ids_memmap_path=self.doc_ids_memmap_path,
             split_meta_info=self.split_meta_info,
             split=split,
             return_docs=return_docs,

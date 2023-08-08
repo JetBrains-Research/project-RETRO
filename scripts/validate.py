@@ -5,16 +5,16 @@ import argparse
 import json
 import os
 import time
-from datetime import datetime
-import torch
 from collections import defaultdict
+from datetime import datetime
 
+import torch
+from einops import rearrange
 from omegaconf import OmegaConf
 from tqdm import tqdm
-from einops import rearrange
 
-from retro_pytorch.retro_pytorch import RETRO
 from retro_pytorch.retrieval import get_top_similar
+from retro_pytorch.retro_pytorch import RETRO
 from retro_pytorch.training import TrainingWrapper
 
 parser = argparse.ArgumentParser(description="")
@@ -45,7 +45,7 @@ add_flag += "_star"
 add_flag += "_conc_proj"
 knn_path_train = os.path.join(paths.texts_folder, "knn_from_project.dat")
 if not no_retrieve:
-    config.model_hyperparameters.max_seq_len = 2*config.model_hyperparameters.max_seq_len
+    config.model_hyperparameters.max_seq_len = 2 * config.model_hyperparameters.max_seq_len
     on_project = True
     print("Training on the retrieval from the projects")
 
@@ -70,7 +70,7 @@ with open(stats_path, "r") as f:
 
 # import torch
 retro = RETRO(**config.model_hyperparameters).cuda()
-config.model_hyperparameters.max_seq_len = config.model_hyperparameters.max_seq_len//2
+config.model_hyperparameters.max_seq_len = config.model_hyperparameters.max_seq_len // 2
 retro_base = RETRO(**config.model_hyperparameters).cuda()
 model_file = paths.model_folder + "retro_star_conc_proj_last_0.pth"
 model_file_base = paths.model_folder + "retro_no_retrieve_star_conc_proj_last_1.pth"
@@ -94,13 +94,12 @@ wrapper_db = TrainingWrapper(
     ),  # path to document ids per chunk (used for filtering neighbors belonging to same document)
     processed_stats_json_path=stats_path,
     knn_memmap_path=knn_path_train,  # used for the training
-    knn_memmap_path_option=None,# knn_path_optional,  ## used for additional validaton purposes
+    knn_memmap_path_option=None,  # knn_path_optional,  ## used for additional validaton purposes
     split_meta_path=os.path.join(paths.texts_folder, "split_meta_dict.json"),
     knn_extra_neighbors=retrieve_hyperparams.knn_extra_neighbors,  # num extra neighbors to fetch
     precalculate_knn=False,
     index_params=index_params,
 )
-
 
 
 fetch_self_ret = wrapper_db.fetch_self_ret
@@ -111,24 +110,26 @@ fetch_previous = wrapper_db.fetch_previous
 
 batch_size_val = training_params.batch_size_val
 # batch_size_val = 7
-val_dl = iter(wrapper_db.get_dataloader(split="val", return_docs = True, batch_size=batch_size_val, shuffle=False))
+val_dl = iter(wrapper_db.get_dataloader(split="val", return_docs=True, batch_size=batch_size_val, shuffle=False))
 # %%
 
-doc_proj_file = os.path.join(paths.texts_folder, 'doc_proj_dict.json')
-doc_bin_dict_path = os.path.join(paths.texts_folder, 'doc_bin_dict.json')
-bin_val_losses_path = os.path.join(paths.out_folder, f'bin_val_losses{add_flag}.json')
+doc_proj_file = os.path.join(paths.texts_folder, "doc_proj_dict.json")
+doc_bin_dict_path = os.path.join(paths.texts_folder, "doc_bin_dict.json")
+bin_val_losses_path = os.path.join(paths.out_folder, f"bin_val_losses{add_flag}.json")
 
-with open(doc_proj_file, 'r') as file:
+with open(doc_proj_file, "r") as file:
     doc_proj_dict = json.load(file)
 
-with open(doc_bin_dict_path, 'r') as file:
+with open(doc_bin_dict_path, "r") as file:
     doc_bin_dict = json.load(file)
 
-doc_proj_dict = {int(key):value for key, value in doc_proj_dict.items()}
-doc_bin_dict = {int(key):value for key, value in doc_bin_dict.items()}
+doc_proj_dict = {int(key): value for key, value in doc_proj_dict.items()}
+doc_bin_dict = {int(key): value for key, value in doc_bin_dict.items()}
+
 
 def get_batch_from_dict(dict_, keys):
     return [dict_[doc_id] for doc_id in keys]
+
 
 losses_val: list[list[float]] = []
 
@@ -136,9 +137,11 @@ text_start = f"\n------- FINAL VALIDATION {str(datetime.now())}, batch size = {b
 print(text_start)
 
 bin_losses_dict = defaultdict(list)
-bin_losses_dict['step'] = 0
-bin_losses_dict['messeage'] = f"Started at {str(datetime.now())}, Batch size = {batch_size_val}, Retrieve = {not no_retrieve}"
-return_itemwise=True
+bin_losses_dict["step"] = 0
+bin_losses_dict[
+    "messeage"
+] = f"Started at {str(datetime.now())}, Batch size = {batch_size_val}, Retrieve = {not no_retrieve}"
+return_itemwise = True
 tt = time.time()
 
 with torch.no_grad():
@@ -155,20 +158,29 @@ with torch.no_grad():
         else:
             seq_cut = seq[1:]
 
-            for fetch_neighbours in [fetch_self_ret]:#, fetch_random_chunk, generate_pure_random_chunk, fetch_previous
-                retrieved = fetch_neighbours(seq, ret = ret)
+            for fetch_neighbours in [
+                fetch_self_ret
+            ]:  # , fetch_random_chunk, generate_pure_random_chunk, fetch_previous
+                retrieved = fetch_neighbours(seq, ret=ret)
                 if fetch_neighbours != fetch_previous:
                     retrieved = retrieved[1:]
 
                 (b, seq_size, n_knn, chun_dsize) = ret.shape
 
-                retrieved = rearrange(retrieved[:, :, 0, :chun_dsize//2], "b s c -> b (s c)")
-                retrieved = get_top_similar(retieved=retrieved, context=seq_cut, k_imp=10, pad_id=0)
-                retrieved = rearrange(retrieved, "b (s c) -> b s 1 c", c = chun_dsize//2)
+                # retrieved = rearrange(retrieved[:, :, 0, : chun_dsize // 2], "b s c -> b (s c)")
+                retrieved = rearrange(retrieved, "b s k c -> b (s k c)")
+                retrieved = get_top_similar(retieved=retrieved, context=seq_cut, k_imp=128, pad_id=0)
+                retrieved = rearrange(retrieved, "b (s c) -> b s 1 c", c=chun_dsize // 2)
                 retrieved = torch.cat((retrieved, retrieved), dim=-1)
 
-                loss_and_recall = retro(seq_cut.cuda(), retrieved=retrieved.cuda(), return_loss=True, return_itemwise=return_itemwise,
-                             return_recall = True, k_list = [1, 3, 5])
+                loss_and_recall = retro(
+                    seq_cut.cuda(),
+                    retrieved=retrieved.cuda(),
+                    return_loss=True,
+                    return_itemwise=return_itemwise,
+                    return_recall=True,
+                    k_list=[1, 3, 5],
+                )
                 losses_cur.append(loss_and_recall)
 
             # loss_and_recall = retro_base(seq_cut.cuda(), retrieved=None, return_loss=True, return_itemwise=return_itemwise,
@@ -183,11 +195,11 @@ with torch.no_grad():
         #     break
 
         if step % 120 == 0:
-            bin_losses_dict['step'] = step
+            bin_losses_dict["step"] = step
             with open(bin_val_losses_path, "w") as f:
                 json.dump(bin_losses_dict, f)
 
-bin_losses_dict['step'] = step
+bin_losses_dict["step"] = step
 with open(bin_val_losses_path, "w") as f:
     json.dump(bin_losses_dict, f)
 
@@ -195,4 +207,3 @@ time_used = time.time() - tt
 print(f"Time used = {time_used:.2f} s")
 
 #%%
-

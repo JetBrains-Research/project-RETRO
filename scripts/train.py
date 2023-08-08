@@ -43,7 +43,7 @@ add_flag += "_mask_sparse"
 
 knn_path_train = os.path.join(paths.texts_folder, "knn_from_project.dat")
 if not no_retrieve:
-    config.model_hyperparameters.max_seq_len = 2*config.model_hyperparameters.max_seq_len
+    config.model_hyperparameters.max_seq_len = 2 * config.model_hyperparameters.max_seq_len
     on_project = True
     print("Training on the retrieval from the projects")
 
@@ -95,7 +95,7 @@ wrapper_db = TrainingWrapper(
     ),  # path to document ids per chunk (used for filtering neighbors belonging to same document)
     processed_stats_json_path=stats_path,
     knn_memmap_path=knn_path_train,  # used for the training
-    knn_memmap_path_option=None,# knn_path_optional,  ## used for additional validaton purposes
+    knn_memmap_path_option=None,  # knn_path_optional,  ## used for additional validaton purposes
     split_meta_path=os.path.join(paths.texts_folder, "split_meta_dict.json"),
     knn_extra_neighbors=retrieve_hyperparams.knn_extra_neighbors,  # num extra neighbors to fetch
     precalculate_knn=False,

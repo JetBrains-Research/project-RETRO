@@ -82,7 +82,7 @@ def val_steps(
     val_step = 0
     with torch.no_grad():
         for seq, ret in tqdm(val_dl, total=num_val, ncols=50):
-            #seq = seq.cuda() # !!!!!!!!!!!!!!!!!
+            # seq = seq.cuda() # !!!!!!!!!!!!!!!!!
             seq, ret = seq[1:], seq[:-1, :-1]
             if no_retrieve:
                 loss = model(seq, retrieved=None, return_loss=True)
@@ -90,9 +90,9 @@ def val_steps(
             else:
 
                 loss = model(seq.cuda(), retrieved=ret.cuda(), return_loss=True)
-                #loss_none = model(seq, retrieved=None, return_loss=True)
+                # loss_none = model(seq, retrieved=None, return_loss=True)
 
-                losses = [loss.item()]#, loss_none.item()
+                losses = [loss.item()]  # , loss_none.item()
 
                 for fetch_neighbours in fetch_neighbours_list:
                     retrieved = fetch_neighbours(seq)

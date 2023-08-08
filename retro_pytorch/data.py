@@ -132,20 +132,21 @@ class RETRODataset(Dataset):
             # docs_knns = docs_memmap[knns]
             docs_chunks = docs_memmap[chunk_range]
             retrieved = knn_to_retrieved_chunks(
-                    knns,
-                    chunks_memmap,
-                    add_continuations=self.add_continuations,
-                    eos_id=self.eos_id,
-                    num_chunks=self.num_chunks,
-                )
+                knns,
+                chunks_memmap,
+                add_continuations=self.add_continuations,
+                eos_id=self.eos_id,
+                num_chunks=self.num_chunks,
+            )
 
         seq_tokens_torch = torch.from_numpy(seq_tokens).long()
         retrieved_torch = torch.from_numpy(retrieved).long()
 
         if self.return_docs:
-            return seq_tokens_torch, retrieved_torch, docs_chunks[0] #, docs_knns,
+            return seq_tokens_torch, retrieved_torch, docs_chunks[0]  # , docs_knns,
         else:
             return seq_tokens_torch, retrieved_torch
+
 
 def split_into_chunks(seq_tokens, seq_length, pad_id=0):
     # Calculate the number of chunks needed

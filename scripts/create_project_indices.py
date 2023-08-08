@@ -8,7 +8,6 @@ import os
 import numpy as np
 from omegaconf import OmegaConf
 
-
 from retro_pytorch.retrieval import calculate_per_project_knn, test_knn
 
 parser = argparse.ArgumentParser(description="")

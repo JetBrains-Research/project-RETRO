@@ -1,20 +1,20 @@
+import json
+import os
+import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 import faiss
-import os
-import time
-import json
 import numpy as np
+import pyarrow.parquet as pq
 import torch
-from torch import einsum
 import torch.nn.functional as F
 from einops import rearrange
 from omegaconf import OmegaConf
+from torch import einsum
 from tqdm import tqdm
 from transformers import AutoTokenizer, T5ForConditionalGeneration
-import pyarrow.parquet as pq
-from collections import defaultdict
 
 from retro_pytorch.utils import memmap, reset_folder_
 
@@ -181,9 +181,9 @@ def text_folder_to_chunks_(
     for data_file in data_file_paths:
         parquet_file = pq.ParquetFile(data_file)
 
-        column_names = ['bin', 'project_id', 'doc_id']
+        column_names = ["bin", "project_id", "doc_id"]
         data = parquet_file.read(column_names).to_pandas()
-        doc_bin_dict_split = dict(zip(data['doc_id'], data['bin']))
+        doc_bin_dict_split = dict(zip(data["doc_id"], data["bin"]))
         doc_bin_dict.update(doc_bin_dict_split)
 
     with open(doc_bin_dict_path, "w") as file:
@@ -213,7 +213,6 @@ def text_folder_to_chunks_(
                     project_id = row["project_id"]
                     proj_doc_dict[project_id].append(doc_id)
 
-
                     # chunks - (n_chunks, chunk_len+1) it adds an extra token to the end of each chunk = first token of the next chunk.
                     # seq - [0, num_chunks_per_seq, 2*num_chunks_per_seq, 3*..., ...]
                     chunks, seq = doc_text_to_chunks_and_seq_indices(
@@ -241,7 +240,13 @@ def text_folder_to_chunks_(
                     total_seqs_split += doc_seq_len
 
             ## TODO change split_dict. Now dataloader uses split:metadata format.
-            split_dict = dict({'split': split, 'split size in seqs': total_seqs_split, 'first sequence index': total_seqs - total_seqs_split})
+            split_dict = dict(
+                {
+                    "split": split,
+                    "split size in seqs": total_seqs_split,
+                    "first sequence index": total_seqs - total_seqs_split,
+                }
+            )
             split_metainfo[file_ind] = split_dict
             file_ind += 1
 
@@ -261,7 +266,9 @@ def text_folder_to_chunks_(
 
     return dict(chunks=total_chunks, docs=total_docs, seqs=total_seqs, chunk_size=chunk_size)
 
+
 # embedding function
+
 
 @torch.no_grad()
 def embed(token_ids, return_cls_repr=False, eps=1e-8, pad_id=0, return_all=False):
@@ -294,10 +301,10 @@ def embed(token_ids, return_cls_repr=False, eps=1e-8, pad_id=0, return_all=False
 
 def get_top_similar(retieved, context, k_imp, pad_id=0):
 
-    '''
+    """
     Takes k_imp tokens from retrieved according to the contexts
     Then pads thiese tokes to match retrieved shape (temporal solution)
-    '''
+    """
 
     with torch.no_grad():
         context_emb = embed(context, return_all=True)
@@ -314,6 +321,7 @@ def get_top_similar(retieved, context, k_imp, pad_id=0):
     padded_batch = torch.cat((pad_tokens, important_retrieve), dim=1)
 
     return padded_batch
+
 
 # chunks to knn
 
@@ -405,6 +413,7 @@ def build_compound_index(
 
     return index
 
+
 def calculate_per_project_knn(
     doc_ids_memmap_path,
     embedding_path,
@@ -479,6 +488,7 @@ def calculate_per_project_knn(
     print(f"Average nonzero error rate  = {error_rates_av}")
     print(f"Max error rate  = {np.max(error_rates)}")
 
+
 def test_knn(
     embedding_path,
     knn_path,
@@ -492,7 +502,6 @@ def test_knn(
 
     knn_map = np.memmap(knn_path, shape=(num_chunks, num_nearest_neighbors), dtype=np.int32, mode="r")
     knn_map = np.array(knn_map)
-
 
     random_ind = np.random.randint(num_chunks, size=n_samples)
 
@@ -523,10 +532,10 @@ def test_knn(
     std_2 = np.std(dist_good_2[dist_good_2 > 0])
     std_wrong = np.std(dist_wrong[dist_good_1 > 0])
 
-
     print(f"Mean distance for best neighbours        {mean_1:.2f} +- {std_1:.2f}")
     print(f"Mean distance for second best neighbours {mean_2:.2f} +- {std_2:.2f}")
     print(f"Mean distance for wrong samples          {mean_wrong:.2f} +- {std_wrong:.2f}")
+
 
 def index_embeddings(
     embedding_path,

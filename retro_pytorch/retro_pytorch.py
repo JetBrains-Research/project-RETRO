@@ -48,9 +48,9 @@ def deepnorm_init(transformer, beta, module_name_match_list=[".ff.", ".to_v", ".
 
 def calculate_recall_at_k(logits, labels, k):
 
-    '''
+    """
     Elementwise recall calculation
-    '''
+    """
 
     # Rearrange the logits to shape (batch_size, num_classes, sequence_length)
     logits = rearrange(logits, "b n c -> b c n")
@@ -665,13 +665,14 @@ class RETRO(nn.Module):
             deepnorm_init(self.encoder, 0.87 * ((enc_depth**4) * dec_depth) ** -0.0625)
             deepnorm_init(self.decoder, (12 * dec_depth) ** -0.25)
 
-    def forward(self, seq, retrieved=None, return_loss=False, return_itemwise=False, return_recall = False, k_list = [1]):
+    def forward(self, seq, retrieved=None, return_loss=False, return_itemwise=False, return_recall=False, k_list=[1]):
 
         seq_len = seq.size(1) - 1
 
         if exists(retrieved):
             retrieved = torch.reshape(
-                retrieved[:, :, 0, :64], (retrieved.size(0), retrieved.size(1) * retrieved.size(-1) // 2) ###! !!!!!!!! TODO Here was  64:
+                retrieved[:, :, 0, :64],
+                (retrieved.size(0), retrieved.size(1) * retrieved.size(-1) // 2),  ###! !!!!!!!! TODO Here was  64:
             )
             seq = torch.concat((retrieved, seq), dim=-1)
             pos_emb = self.pos_emb(torch.arange(self.seq_len, device=seq.device))
@@ -702,12 +703,13 @@ class RETRO(nn.Module):
 
         # cross entropy loss
         # if return_itemwise = True we calculate loss for each batch separately
-        loss = F.cross_entropy(rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id,
-                                     reduce=not return_itemwise)
+        loss = F.cross_entropy(
+            rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id, reduce=not return_itemwise
+        )
 
         if return_itemwise:
             loss = loss.detach().cpu()
-            loss = loss.where(loss != 0., torch.tensor(float('nan')))
+            loss = loss.where(loss != 0.0, torch.tensor(float("nan")))
             loss = torch.nanmean(loss, dim=1)
 
         if return_recall:
