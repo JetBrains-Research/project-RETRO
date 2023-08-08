@@ -7,6 +7,7 @@ import time
 import json
 import numpy as np
 import torch
+from torch import einsum
 import torch.nn.functional as F
 from einops import rearrange
 from omegaconf import OmegaConf
@@ -154,6 +155,8 @@ def text_folder_to_chunks_(
     doc_ids_memmap_path,
     split_meta_path,
     proj_doc_dict_path,
+    doc_proj_dict_path,
+    doc_bin_dict_path,
     chunk_size=64,
     seq_len=2048,
     # glob = '**/*.txt',
@@ -172,6 +175,19 @@ def text_folder_to_chunks_(
     file_ind = 0
     split_metainfo = dict()
     proj_doc_dict = defaultdict(list)
+
+    doc_bin_dict = dict()
+
+    for data_file in data_file_paths:
+        parquet_file = pq.ParquetFile(data_file)
+
+        column_names = ['bin', 'project_id', 'doc_id']
+        data = parquet_file.read(column_names).to_pandas()
+        doc_bin_dict_split = dict(zip(data['doc_id'], data['bin']))
+        doc_bin_dict.update(doc_bin_dict_split)
+
+    with open(doc_bin_dict_path, "w") as file:
+        json.dump(doc_bin_dict, file)
 
     with memmap(chunks_memmap_path, shape=chunks_shape, dtype=np.int32, mode="w+") as chunks_memmap, memmap(
         seqs_memmap_path, shape=seqs_shape, dtype=np.int32, mode="w+"
@@ -224,6 +240,7 @@ def text_folder_to_chunks_(
 
                     total_seqs_split += doc_seq_len
 
+            ## TODO change split_dict. Now dataloader uses split:metadata format.
             split_dict = dict({'split': split, 'split size in seqs': total_seqs_split, 'first sequence index': total_seqs - total_seqs_split})
             split_metainfo[file_ind] = split_dict
             file_ind += 1
@@ -234,6 +251,11 @@ def text_folder_to_chunks_(
     for key in proj_doc_dict:
         proj_doc_dict[key].sort()
 
+    doc_proj_dict = {doc_id: project_id for project_id, doc_ids in proj_doc_dict.items() for doc_id in doc_ids}
+
+    with open(doc_proj_dict_path, "w") as file:
+        json.dump(doc_proj_dict, file)
+
     with open(proj_doc_dict_path, "w") as file:
         json.dump(proj_doc_dict, file)
 
@@ -242,7 +264,7 @@ def text_folder_to_chunks_(
 # embedding function
 
 @torch.no_grad()
-def embed(token_ids, return_cls_repr=False, eps=1e-8, pad_id=0):
+def embed(token_ids, return_cls_repr=False, eps=1e-8, pad_id=0, return_all=False):
     global PAD_TOKEN, MODEL
     mask = token_ids != pad_id
 
@@ -255,6 +277,9 @@ def embed(token_ids, return_cls_repr=False, eps=1e-8, pad_id=0):
     if return_cls_repr:
         return hidden_state[:, 0]  # return [cls] as representation
 
+    if return_all:
+        return hidden_state  # return [cls] as representation
+
     # if not exists(mask):
     #     return hidden_state.mean(dim=1)
 
@@ -266,6 +291,29 @@ def embed(token_ids, return_cls_repr=False, eps=1e-8, pad_id=0):
     masked_mean = numer / (denom + eps)
     return masked_mean
 
+
+def get_top_similar(retieved, context, k_imp, pad_id=0):
+
+    '''
+    Takes k_imp tokens from retrieved according to the contexts
+    Then pads thiese tokes to match retrieved shape (temporal solution)
+    '''
+
+    with torch.no_grad():
+        context_emb = embed(context, return_all=True)
+        retieved_emb = embed(retieved, return_all=True)
+
+    sim = einsum("b i d, b j d -> b i j", context_emb, retieved_emb).sum(dim=1).cpu()
+    _, top_ind = torch.topk(sim, k_imp, dim=1)
+    important_retrieve = torch.gather(retieved, dim=1, index=top_ind)
+
+    ### padding
+    max_seq_len = retieved.size(1)
+    pad_lengths = max_seq_len - k_imp
+    pad_tokens = torch.full((retieved.size(0), pad_lengths), pad_id, dtype=retieved.dtype, device=retieved.device)
+    padded_batch = torch.cat((pad_tokens, important_retrieve), dim=1)
+
+    return padded_batch
 
 # chunks to knn
 

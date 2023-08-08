@@ -169,6 +169,8 @@ class TrainingWrapper(nn.Module):
         knn_memmap_path_option="./knn_from_all.dat",
         split_meta_path="./split_meta_dict.json",
         proj_doc_dict_path = 'proj_doc_dict.json',
+        doc_proj_dict_path = 'doc_proj_dict.json',
+        doc_bin_dict_path = 'doc_bin_dict_path',
         max_chunks=1_000_000,
         max_seqs=100_000,
         knn_extra_neighbors=100,
@@ -203,6 +205,8 @@ class TrainingWrapper(nn.Module):
                 doc_ids_memmap_path=doc_ids_memmap_path,
                 split_meta_path = split_meta_path,
                 proj_doc_dict_path = proj_doc_dict_path,
+                doc_proj_dict_path = doc_proj_dict_path,
+                doc_bin_dict_path = doc_bin_dict_path,
                 chunk_size=chunk_size,
                 seq_len=max_seq_len,
                 max_chunks=max_chunks,
@@ -365,7 +369,7 @@ class TrainingWrapper(nn.Module):
     #
     #         return knn_chunks_torch
 
-    def fetch_random_chunk(self, seq, doc_except=None):
+    def fetch_random_chunk(self, seq, ret = None):
 
         """
         fetches random chunk from database
@@ -379,7 +383,24 @@ class TrainingWrapper(nn.Module):
         batch_shape = (batch_size, seq_size, self.knn, 2 * self.chunk_size)
         return torch.tensor(selected_pairs.reshape(batch_shape)).cuda()
 
-    def fetch_ideal(self, seq, doc_except=None):
+    def fetch_none(self, seq, ret = None):
+        return None
+
+    def fetch_self_ret(self, seq, ret=None):
+        return ret
+
+    def fetch_previous(self, seq, ret=None):
+
+        ret = seq[:-1, :-1]
+
+        batch_size = ret.size(0)
+        seq_size = self.seq_len // self.chunk_size
+        ret_shape = (batch_size, seq_size, 1, self.chunk_size)
+        ret = ret.view(ret_shape)
+        ret = torch.cat((ret, ret), dim=-1)
+        return ret
+
+    def fetch_ideal(self, seq, ret=None):
 
         """
         fetches random chunk from database
@@ -403,7 +424,7 @@ class TrainingWrapper(nn.Module):
 
         return ideal_chunks.cuda()
 
-    def generate_pure_random_chunk(self, seq, doc_except=None):
+    def generate_pure_random_chunk(self, seq, ret=None):
 
         """
         generates pure random sequence as a chunk
@@ -499,7 +520,7 @@ class TrainingWrapper(nn.Module):
 
         return out
 
-    def get_dataloader(self, split, **kwargs):
+    def get_dataloader(self, split, return_docs = False, **kwargs):
 
         # retro dataset
         self.ds = RETRODataset(
@@ -512,8 +533,10 @@ class TrainingWrapper(nn.Module):
             chunk_nn_memmap_path=self.knn_memmap_path,
             chunk_nn_memmap_path_option=self.knn_memmap_path_option,
             seqs_memmap_path=self.seqs_memmap_path,
+            doc_ids_memmap_path = self.doc_ids_memmap_path,
             split_meta_info=self.split_meta_info,
             split=split,
+            return_docs=return_docs,
         )
 
         return DataLoader(self.ds, **kwargs)

@@ -66,8 +66,10 @@ class RETRODataset(Dataset):
         chunk_nn_memmap_path,
         chunk_nn_memmap_path_option,
         seqs_memmap_path,
+        doc_ids_memmap_path,
         split_meta_info,
         split,
+        return_docs=False,
         eos_id=EOS_ID,
         pad_id=0.0,
         add_continuations=True,
@@ -78,6 +80,7 @@ class RETRODataset(Dataset):
         self.seq_num_chunks = seq_len // chunk_size
         self.eos_id = eos_id
         self.pad_id = pad_id
+        self.return_docs = return_docs
 
         split_loc = split_meta_info[split]
         self.split_size = split_loc["split size in seqs"]
@@ -93,6 +96,7 @@ class RETRODataset(Dataset):
         self.get_knns = partial(memmap, chunk_nn_memmap_path, dtype=np.int32, shape=knn_shape)
         # self.get_knns_option = partial(memmap, chunk_nn_memmap_path_option, dtype=np.int32, shape=knn_shape)
         self.get_seqs = partial(memmap, seqs_memmap_path, dtype=np.int32, shape=(num_sequences,))
+        self.get_docs = partial(memmap, doc_ids_memmap_path, dtype=np.int32, shape=self.num_chunks)
 
     def __len__(self):
         return self.split_size - 1
@@ -102,10 +106,8 @@ class RETRODataset(Dataset):
 
         index = self.split_start + ind
         # commented lines were used to test correctness of the train-val split
-        # docs_memmap_path = '../../data/texts_folder_cls/train.doc_ids.dat'
-        # self.get_docs = partial(memmap, docs_memmap_path, dtype=np.int32, shape=self.num_chunks)
         # with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_knns_option() as knns_memmap_option, self.get_seqs() as seqs_memmap, self.get_docs() as docs_memmap:
-        with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_seqs() as seqs_memmap:
+        with self.get_chunks() as chunks_memmap, self.get_knns() as knns_memmap, self.get_seqs() as seqs_memmap, self.get_docs() as docs_memmap:
 
             begin_chunk_index = seqs_memmap[index]
             chunk_range = slice(begin_chunk_index, (begin_chunk_index + self.seq_num_chunks))
@@ -116,7 +118,10 @@ class RETRODataset(Dataset):
             seq_tokens = np.concatenate((chunks[:, :-1].flatten(), chunks[-1, -1:]))
 
             # mask out (with padding tokens) any token following an <eos> | disallow having more than 1 document in a sequence, as it would break RETRO's CCA
-
+            # TODO If in the middle of seq, doc changes (EOS token), the rest is masked by 0
+            # But retrieved still is non zero
+            # 1. Change retrieved to be 0 for 0 chunks
+            # 2. Use the rest of the seq in the training too.
             seq_mask = np.cumsum(seq_tokens == self.eos_id, axis=0)
             seq_mask = np.pad(seq_mask, (1, 0))[:-1] == 0.0
             seq_tokens = np.where(seq_mask, seq_tokens, 0.0)
@@ -125,8 +130,7 @@ class RETRODataset(Dataset):
             knns = knns_memmap[chunk_range]
 
             # docs_knns = docs_memmap[knns]
-            # docs_chunks = docs_memmap[chunk_range]
-            # retrieved_1 = knn_to_retrieved_chunks(
+            docs_chunks = docs_memmap[chunk_range]
             retrieved = knn_to_retrieved_chunks(
                     knns,
                     chunks_memmap,
@@ -137,8 +141,11 @@ class RETRODataset(Dataset):
 
         seq_tokens_torch = torch.from_numpy(seq_tokens).long()
         retrieved_torch = torch.from_numpy(retrieved).long()
-        return seq_tokens_torch, retrieved_torch  # , docs_chunks, docs_knns,
 
+        if self.return_docs:
+            return seq_tokens_torch, retrieved_torch, docs_chunks[0] #, docs_knns,
+        else:
+            return seq_tokens_torch, retrieved_torch
 
 def split_into_chunks(seq_tokens, seq_length, pad_id=0):
     # Calculate the number of chunks needed

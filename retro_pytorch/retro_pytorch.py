@@ -46,6 +46,26 @@ def deepnorm_init(transformer, beta, module_name_match_list=[".ff.", ".to_v", ".
             nn.init.constant_(module.bias.data, 0)
 
 
+def calculate_recall_at_k(logits, labels, k):
+
+    '''
+    Elementwise recall calculation
+    '''
+
+    # Rearrange the logits to shape (batch_size, num_classes, sequence_length)
+    logits = rearrange(logits, "b n c -> b c n")
+    # Get the top-k predictions along the class dimension
+    top_k_predictions = torch.topk(logits, k, dim=1)[1]
+    # Expand the true labels to match the shape of top_k_predictions
+    expanded_labels = labels.unsqueeze(1).expand_as(top_k_predictions)
+    # Check if true labels exist in the top-k predictions
+    correct_predictions = torch.sum(expanded_labels == top_k_predictions, dim=1)
+    # Calculate recall@k as the percentage of correct predictions
+    recall_at_k = torch.mean(correct_predictions.float(), dim=-1)
+
+    return recall_at_k.cpu()
+
+
 # normalization
 
 
@@ -225,6 +245,18 @@ class Attention(nn.Module):
         if self.causal:
             i, j = sim.shape[-2:]
             causal_mask = torch.ones(i, j, device=device, dtype=torch.bool).triu(j - i + 1)
+            #
+            # ### TODO do it properly! Also this would fail is no retrieve given
+            # chun_size = 64
+            # n_chunks = 8
+            # one_block = torch.ones(chun_size, chun_size, dtype=torch.bool)
+            # block_diagonal_matrix = ~torch.block_diag(*(n_chunks * (one_block,)))
+            #
+            # block_matrix = block_diagonal_matrix
+            # causal_mask[:i // 2, :j // 2] = block_matrix
+            # causal_mask[i // 2:, :j // 2] = block_matrix
+            # # causal_mask[:, :j // 2] = False
+
             sim = sim.masked_fill(causal_mask, mask_value)
 
         # attention
@@ -633,13 +665,13 @@ class RETRO(nn.Module):
             deepnorm_init(self.encoder, 0.87 * ((enc_depth**4) * dec_depth) ** -0.0625)
             deepnorm_init(self.decoder, (12 * dec_depth) ** -0.25)
 
-    def forward(self, seq, retrieved=None, return_loss=False):
+    def forward(self, seq, retrieved=None, return_loss=False, return_itemwise=False, return_recall = False, k_list = [1]):
 
         seq_len = seq.size(1) - 1
 
         if exists(retrieved):
             retrieved = torch.reshape(
-                retrieved[:, :, 0, 64:], (retrieved.size(0), retrieved.size(1) * retrieved.size(-1) // 2)
+                retrieved[:, :, 0, :64], (retrieved.size(0), retrieved.size(1) * retrieved.size(-1) // 2) ###! !!!!!!!! TODO Here was  64:
             )
             seq = torch.concat((retrieved, seq), dim=-1)
             pos_emb = self.pos_emb(torch.arange(self.seq_len, device=seq.device))
@@ -669,8 +701,21 @@ class RETRO(nn.Module):
             return logits
 
         # cross entropy loss
+        # if return_itemwise = True we calculate loss for each batch separately
+        loss = F.cross_entropy(rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id,
+                                     reduce=not return_itemwise)
 
-        loss = F.cross_entropy(rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id)
+        if return_itemwise:
+            loss = loss.detach().cpu()
+            loss = loss.where(loss != 0., torch.tensor(float('nan')))
+            loss = torch.nanmean(loss, dim=1)
+
+        if return_recall:
+            # Now for Recall@k calculation:
+            recall_at_k = [calculate_recall_at_k(logits, labels, k=k) for k in k_list]
+
+            return torch.stack([loss.cpu()] + recall_at_k, dim=0).t()
+
         return loss
 
     def forward_cross_attn(self, seq, retrieved=None, return_loss=False):
@@ -767,4 +812,5 @@ class RETRO(nn.Module):
         # cross entropy loss
 
         loss = F.cross_entropy(rearrange(logits, "b n c -> b c n"), labels, ignore_index=self.pad_id)
+
         return loss

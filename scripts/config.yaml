@@ -16,7 +16,7 @@ model_hyperparameters:
 training_params:
   lr: 3e-4 # learning rate
   freq_val: 2000 # frequency of validation
-  num_val: 20 # number of validation steps
+  num_val: 30 # number of validation steps
   batch_size: 10
   batch_size_val: 64 # batch size on validation steps
   batch_accumulation: 60 # number of samples before optimization step

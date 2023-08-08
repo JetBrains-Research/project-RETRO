@@ -39,22 +39,14 @@ else:
 
 add_flag = add_flag + "_star"
 add_flag += "_conc_proj"
+add_flag += "_mask_sparse"
+
 knn_path_train = os.path.join(paths.texts_folder, "knn_from_project.dat")
-# knn_path_optional = os.path.join(paths.texts_folder, "knn_from_all.dat")
 if not no_retrieve:
     config.model_hyperparameters.max_seq_len = 2*config.model_hyperparameters.max_seq_len
     on_project = True
     print("Training on the retrieval from the projects")
-    # knn_path_train = os.path.join(paths.texts_folder, "knn_per_project.dat")
-    # knn_path_optional = os.path.join(paths.texts_folder, "knn_from_all.dat")
-    # else:
-    #     print("Training on the retrieval from the all dataset")
-    #     add_flag += "_conc_all"
-    #     knn_path_train = os.path.join(paths.texts_folder, "knn_from_all.dat")
-    #     knn_path_optional = os.path.join(paths.texts_folder, "knn_per_project.dat")
 
-
-#add_flag += "_dev"
 """
 Training. Add flag --no-retrieve or -no if you want to train without retrieval.
 It would add '_no_retrieve' to output filenames (model and train/val loss tracking)
@@ -161,7 +153,7 @@ saved_last_ind = 0
 for epoch in range(1):
     train_dl = iter(wrapper_db.get_dataloader(split="train", batch_size=batch_size, shuffle=True))
     print(f"---------  EPOCH {epoch} ---------")
-    for train_steps, (seq, ret) in enumerate(tqdm(train_dl), start=1):
+    for train_steps, (seq, ret) in enumerate(tqdm(train_dl, ncols=100), start=1):
 
         if no_retrieve:
             ret = None
