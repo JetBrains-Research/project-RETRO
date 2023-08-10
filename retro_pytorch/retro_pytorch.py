@@ -46,7 +46,7 @@ def deepnorm_init(transformer, beta, module_name_match_list=[".ff.", ".to_v", ".
             nn.init.constant_(module.bias.data, 0)
 
 
-def calculate_recall_at_k(logits, labels, k):
+def calculate_recall_at_k(logits, labels, k, return_itemwise):
 
     """
     Elementwise recall calculation
@@ -62,6 +62,9 @@ def calculate_recall_at_k(logits, labels, k):
     correct_predictions = torch.sum(expanded_labels == top_k_predictions, dim=1)
     # Calculate recall@k as the percentage of correct predictions
     recall_at_k = torch.mean(correct_predictions.float(), dim=-1)
+
+    if not return_itemwise:
+        recall_at_k = recall_at_k.mean()
 
     return recall_at_k.cpu()
 
@@ -600,6 +603,7 @@ class RETRO(nn.Module):
         norm_klass=None,
         gated_rmsnorm=False,
         use_deepnet=False,
+        use_cross_attn=True,
     ):
         super().__init__()
         assert dim_head >= MIN_DIM_HEAD, f"dimension per head must be greater than {MIN_DIM_HEAD}"
@@ -630,19 +634,24 @@ class RETRO(nn.Module):
 
         # define encoder and decoders
 
-        self.encoder = Encoder(
-            dim=enc_dim,
-            context_dim=dec_dim,
-            depth=enc_depth,
-            attn_dropout=enc_attn_dropout,
-            ff_dropout=enc_ff_dropout,
-            cross_attn_layers=enc_cross_attn_layers,
-            post_norm=use_deepnet,
-            norm_klass=norm_klass,
-            scale_residual=enc_scale_residual,
-            output_dim=dec_dim,
-            heads=heads,
-        )
+        if use_cross_attn:
+
+            print("Using cross-attn approach")
+            self.encoder = Encoder(
+                dim=enc_dim,
+                context_dim=dec_dim,
+                depth=enc_depth,
+                attn_dropout=enc_attn_dropout,
+                ff_dropout=enc_ff_dropout,
+                cross_attn_layers=enc_cross_attn_layers,
+                post_norm=use_deepnet,
+                norm_klass=norm_klass,
+                scale_residual=enc_scale_residual,
+                output_dim=dec_dim,
+                heads=heads,
+            )
+        else:
+            print("Just concatinating retrieval")
 
         self.decoder = Decoder(
             dim=dec_dim,
@@ -670,10 +679,6 @@ class RETRO(nn.Module):
         seq_len = seq.size(1) - 1
 
         if exists(retrieved):
-            retrieved = torch.reshape(
-                retrieved[:, :, 0, :64],
-                (retrieved.size(0), retrieved.size(1) * retrieved.size(-1) // 2),  ###! !!!!!!!! TODO Here was  64:
-            )
             seq = torch.concat((retrieved, seq), dim=-1)
             pos_emb = self.pos_emb(torch.arange(self.seq_len, device=seq.device))
         else:
@@ -714,7 +719,7 @@ class RETRO(nn.Module):
 
         if return_recall:
             # Now for Recall@k calculation:
-            recall_at_k = [calculate_recall_at_k(logits, labels, k=k) for k in k_list]
+            recall_at_k = [calculate_recall_at_k(logits, labels, k=k, return_itemwise=return_itemwise) for k in k_list]
 
             return torch.stack([loss.cpu()] + recall_at_k, dim=0).t()
 

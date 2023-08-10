@@ -26,6 +26,9 @@ omegaconf = "^2.3.0"
 pandas = "^2.0.3"
 faiss-cpu = "^1.7.4"
 datasets = "^2.14.0"
+wandb = "^0.15.8"
+lightning = "^2.0.6"
+pytorch-lightning = "^2.0.6"
 
 [tool.poetry.group.dev.dependencies]  # development process dependencies
 black = "^22.3"

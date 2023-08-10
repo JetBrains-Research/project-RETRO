@@ -77,11 +77,12 @@ def val_steps(
     no_retrieve: bool,
     fetch_neighbours_list: list[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
 ) -> list[float]:
+
     model.eval()
     losses_val_cur = []
     val_step = 0
     with torch.no_grad():
-        for seq, ret in tqdm(val_dl, total=num_val, ncols=50):
+        for seq, ret in tqdm(val_dl, total=num_val, ncols=80):
             # seq = seq.cuda() # !!!!!!!!!!!!!!!!!
             seq, ret = seq[1:], seq[:-1, :-1]
             if no_retrieve:
@@ -89,15 +90,23 @@ def val_steps(
                 losses_val_cur.append([loss.item()])
             else:
 
-                loss = model(seq.cuda(), retrieved=ret.cuda(), return_loss=True)
-                # loss_none = model(seq, retrieved=None, return_loss=True)
-
-                losses = [loss.item()]  # , loss_none.item()
+                losses = []
 
                 for fetch_neighbours in fetch_neighbours_list:
                     retrieved = fetch_neighbours(seq)
-                    loss = model(seq.cuda(), retrieved=retrieved.cuda(), return_loss=True)
-                    losses.append(loss.item())
+                    # loss = model(seq.cuda(), retrieved=retrieved.cuda(), return_loss=True)
+                    # losses.append(loss.item())
+
+                    loss_and_recall = model(
+                        seq.cuda(),
+                        retrieved=retrieved.cuda(),
+                        return_loss=True,
+                        return_itemwise=True,
+                        return_recall=True,
+                        k_list=[1, 3, 5],
+                    )
+
+                    losses.append(loss_and_recall)
 
                 losses_val_cur.append(losses)
 

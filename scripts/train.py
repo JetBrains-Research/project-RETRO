@@ -39,11 +39,11 @@ else:
 
 add_flag = add_flag + "_star"
 add_flag += "_conc_proj"
-add_flag += "_mask_sparse"
+add_flag += "_dev"
 
 knn_path_train = os.path.join(paths.texts_folder, "knn_from_project.dat")
 if not no_retrieve:
-    config.model_hyperparameters.max_seq_len = 2 * config.model_hyperparameters.max_seq_len
+    config.model_hyperparameters.max_seq_len = 3 * config.model_hyperparameters.max_seq_len
     on_project = True
     print("Training on the retrieval from the projects")
 
@@ -104,6 +104,7 @@ wrapper_db = TrainingWrapper(
 
 fetch_random_chunk = wrapper_db.fetch_random_chunk
 generate_pure_random_chunk = wrapper_db.generate_pure_random_chunk
+fetch_self_ret = wrapper_db.fetch_self_ret  # just returning retrieve
 
 ### setting up number of steps.
 freq_val = training_params.freq_val  # frequency of validation
@@ -159,6 +160,7 @@ for epoch in range(1):
             ret = None
         else:
             ret = ret.cuda()
+        fetch_self_ret
         loss = retro(seq.cuda(), retrieved=ret, return_loss=True)
         loss.backward()
 
@@ -178,15 +180,12 @@ for epoch in range(1):
                 val_dl,
                 num_val=num_val,
                 no_retrieve=no_retrieve,
-                fetch_neighbours_list=[fetch_random_chunk, generate_pure_random_chunk],
+                fetch_neighbours_list=[fetch_self_ret, fetch_random_chunk],
             )
+
             if val_step < num_val:
                 print("Reloading VAL Dataloader")
                 val_dl = iter(wrapper_db.get_dataloader(split="val", batch_size=batch_size_val, shuffle=True))
-
-            # if no_retrieve:
-            #     losses_val_rnd_cur = losses_val_cur
-            #     losses_val_pure_rnd_cur = losses_val_cur
 
             max_val_loss, saved_ind, saved_last_ind = val_update(
                 retro,

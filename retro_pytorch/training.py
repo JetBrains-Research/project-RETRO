@@ -375,6 +375,8 @@ class TrainingWrapper(nn.Module):
         fetches random chunk from database
         """
 
+        ## TODO !! Rewrite it to fetch sequences, not chunk shape
+
         batch_size = seq.size(0)
         seq_size = self.seq_len // self.chunk_size
         n_samples = seq_size * batch_size * self.knn
@@ -387,17 +389,25 @@ class TrainingWrapper(nn.Module):
         return None
 
     def fetch_self_ret(self, seq, ret=None):
+        ret = torch.reshape(
+            ret[:, :, 0],
+            (ret.size(0), ret.size(1) * ret.size(-1)),
+        )
         return ret
 
     def fetch_previous(self, seq, ret=None):
 
-        ret = seq[:-1, :-1]
+        ret1 = seq[:-2, :-1]
+        ret2 = seq[1:-1, :-1]
 
-        batch_size = ret.size(0)
-        seq_size = self.seq_len // self.chunk_size
-        ret_shape = (batch_size, seq_size, 1, self.chunk_size)
-        ret = ret.view(ret_shape)
-        ret = torch.cat((ret, ret), dim=-1)
+        # batch_size = ret.size(0)
+        # seq_size = self.seq_len // self.chunk_size
+        # ret_shape = (batch_size, seq_size, 1, self.chunk_size)
+        #
+        # ret = ret.view(ret_shape)
+        # ret2 = ret2.view(ret_shape)
+
+        ret = torch.cat((ret1, ret2), dim=-1)
         return ret
 
     def fetch_ideal(self, seq, ret=None):

@@ -13,13 +13,16 @@ model_hyperparameters:
   dim_head: 64  # dimension per head
   dec_attn_dropout: 0.25  # decoder attention dropout
   dec_ff_dropout: 0.25  # decoder feedforward dropout
+  use_cross_attn: False
 training_params:
   lr: 3e-4 # learning rate
-  freq_val: 2000 # frequency of validation
-  num_val: 30 # number of validation steps
-  batch_size: 10
-  batch_size_val: 64 # batch size on validation steps
+  wd: 0.01
+  freq_val: 2000 # 2000 # frequency of validation
+  num_val: 40 # 40 # number of validation steps
+  batch_size: 8
+  batch_size_val: 40 # batch size on validation steps
   batch_accumulation: 60 # number of samples before optimization step
+  num_epochs: 1
 paths:
   texts_folder: ../../data/texts_folder_starcoder/
   data_folder: ../../data/Starcoder/
