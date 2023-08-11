@@ -388,26 +388,22 @@ class TrainingWrapper(nn.Module):
     def fetch_none(self, seq, ret=None):
         return None
 
-    def fetch_self_ret(self, seq, ret=None):
+    def fetch_self_ret(self, seq, ret=None, n_prepend=1):
         ret = torch.reshape(
-            ret[:, :, 0],
-            (ret.size(0), ret.size(1) * ret.size(-1)),
+            ret[:, :, 0, : 64 * n_prepend],
+            (ret.size(0), ret.size(1) * ret.size(-1) * n_prepend // 2),
         )
         return ret
 
-    def fetch_previous(self, seq, ret=None):
+    def fetch_previous(self, seq, ret=None, n_prepend=1):
 
-        ret1 = seq[:-2, :-1]
-        ret2 = seq[1:-1, :-1]
+        ret1 = seq[:-n_prepend, :-1]
+        if n_prepend == 2:
+            ret2 = seq[1:-1, :-1]
+            ret = torch.cat((ret1, ret2), dim=-1)
+        elif n_prepend == 1:
+            ret = ret1
 
-        # batch_size = ret.size(0)
-        # seq_size = self.seq_len // self.chunk_size
-        # ret_shape = (batch_size, seq_size, 1, self.chunk_size)
-        #
-        # ret = ret.view(ret_shape)
-        # ret2 = ret2.view(ret_shape)
-
-        ret = torch.cat((ret1, ret2), dim=-1)
         return ret
 
     def fetch_ideal(self, seq, ret=None):

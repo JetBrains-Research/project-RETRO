@@ -14,12 +14,13 @@ model_hyperparameters:
   dec_attn_dropout: 0.25  # decoder attention dropout
   dec_ff_dropout: 0.25  # decoder feedforward dropout
   use_cross_attn: False
+  n_prepend: 1 # 1 - take only retrieveв chunk, 2 - retrieved chunk and its continuation
 training_params:
   lr: 3e-4 # learning rate
   wd: 0.01
   freq_val: 2000 # 2000 # frequency of validation
   num_val: 40 # 40 # number of validation steps
-  batch_size: 8
+  batch_size: 10
   batch_size_val: 40 # batch size on validation steps
   batch_accumulation: 60 # number of samples before optimization step
   num_epochs: 1

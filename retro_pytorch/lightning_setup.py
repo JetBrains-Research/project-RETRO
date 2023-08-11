@@ -10,7 +10,14 @@ from transformers import get_cosine_schedule_with_warmup
 
 class LitModel(pl.LightningModule):
     def __init__(
-        self, model, train_parameters, no_retrieve=False, self_retr_fun=None, retrieve_functions=None, fun_names=None
+        self,
+        model,
+        train_parameters,
+        no_retrieve=False,
+        n_prepend=1,
+        self_retr_fun=None,
+        retrieve_functions=None,
+        fun_names=None,
     ):
         super().__init__()
         self.model = model
@@ -21,16 +28,22 @@ class LitModel(pl.LightningModule):
         self.self_retr_fun = self_retr_fun
         self.fun_names = fun_names
         self.no_retrieve = no_retrieve
+        self.n_prepend = n_prepend
 
     def training_step(self, batch, batch_idx):
         seq, ret = batch
         if not self.no_retrieve:
-            ret = self.self_retr_fun(seq, ret=ret)
+            ret = self.self_retr_fun(seq, ret=ret, n_prepend=self.n_prepend)
+            ret = ret[self.n_prepend :]
         else:
-            ret1 = seq[:-2, :-1]
-            ret2 = seq[1:-1, :-1]
-            ret = torch.cat((ret1, ret2), dim=-1)
-            seq = seq[2:]
+            ret1 = seq[: -self.n_prepend, :-1]
+            if self.n_prepend == 2:
+                ret2 = seq[1:-1, :-1]
+                ret = torch.cat((ret1, ret2), dim=-1)
+            elif self.n_prepend == 1:
+                ret = ret1
+
+        seq = seq[self.n_prepend :]
         loss = self.model(seq, retrieved=ret, return_loss=True)
         self.log_dict({"train/loss": loss.item()}, on_step=True, prog_bar=True, logger=True)
         return loss
@@ -65,10 +78,10 @@ class LitModel(pl.LightningModule):
         seq, ret = batch
         losses = []
         for fetch_fn in self.retrieve_functions:
-            retrieved = fetch_fn(seq, ret=ret)
+            retrieved = fetch_fn(seq, ret=ret, n_prepend=self.n_prepend)
             if seq.size(0) == retrieved.size(0):
-                retrieved = retrieved[2:]
-            seq_cut = seq[2:]
+                retrieved = retrieved[self.n_prepend :]
+            seq_cut = seq[self.n_prepend :]
 
             val_loss = self.model(seq_cut, retrieved=retrieved, return_loss=True, return_recall=True, k_list=[1, 3, 5])
             losses.append(val_loss)
