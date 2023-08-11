@@ -32,6 +32,8 @@ training_params = config.training_params
 retrieve_hyperparams = config.retrieve.hyperparams
 index_params = config.retrieve.hnsw_params
 
+### TODO rewrite the validation script utilizing pytorch lightning
+
 # Use the arguments in your program
 if no_retrieve:
     print("NO retrieve during training")
@@ -152,7 +154,6 @@ with torch.no_grad():
         losses_cur = []
 
         if no_retrieve:
-            ### TODO add control - training without retrieve, validating with it.
             loss = retro(seq, retrieved=None, return_loss=True, return_itemwise=return_itemwise)
             losses_cur = [loss.cpu()]
         else:
@@ -169,7 +170,7 @@ with torch.no_grad():
 
                 # retrieved = rearrange(retrieved[:, :, 0, : chun_dsize // 2], "b s c -> b (s c)")
                 retrieved = rearrange(retrieved, "b s k c -> b (s k c)")
-                retrieved = get_top_similar(retieved=retrieved, context=seq_cut, k_imp=128, pad_id=0)
+                retrieved = get_top_similar(retrieved=retrieved, context=seq_cut, k_imp=128, pad_id=0)
                 retrieved = rearrange(retrieved, "b (s c) -> b s 1 c", c=chun_dsize // 2)
                 retrieved = torch.cat((retrieved, retrieved), dim=-1)
 

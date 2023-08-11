@@ -299,25 +299,27 @@ def embed(token_ids, return_cls_repr=False, eps=1e-8, pad_id=0, return_all=False
     return masked_mean
 
 
-def get_top_similar(retieved, context, k_imp, pad_id=0):
+def get_top_similar(retrieved, context, k_imp, pad_id=0):
 
     """
+    Not used for now!
+
     Takes k_imp tokens from retrieved according to the contexts
-    Then pads thiese tokes to match retrieved shape (temporal solution)
+    Then pads these tokes to match retrieved shape (temporal solution)
     """
 
     with torch.no_grad():
         context_emb = embed(context, return_all=True)
-        retieved_emb = embed(retieved, return_all=True)
+        retrieved_emb = embed(retrieved, return_all=True)
 
-    sim = einsum("b i d, b j d -> b i j", context_emb, retieved_emb).sum(dim=1).cpu()
+    sim = einsum("b i d, b j d -> b i j", context_emb, retrieved_emb).sum(dim=1).cpu()
     _, top_ind = torch.topk(sim, k_imp, dim=1)
-    important_retrieve = torch.gather(retieved, dim=1, index=top_ind)
+    important_retrieve = torch.gather(retrieved, dim=1, index=top_ind)
 
     ### padding
-    max_seq_len = retieved.size(1)
+    max_seq_len = retrieved.size(1)
     pad_lengths = max_seq_len - k_imp
-    pad_tokens = torch.full((retieved.size(0), pad_lengths), pad_id, dtype=retieved.dtype, device=retieved.device)
+    pad_tokens = torch.full((retrieved.size(0), pad_lengths), pad_id, dtype=retrieved.dtype, device=retrieved.device)
     padded_batch = torch.cat((pad_tokens, important_retrieve), dim=1)
 
     return padded_batch

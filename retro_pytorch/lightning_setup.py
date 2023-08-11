@@ -36,12 +36,12 @@ class LitModel(pl.LightningModule):
             ret = self.self_retr_fun(seq, ret=ret, n_prepend=self.n_prepend)
             ret = ret[self.n_prepend :]
         else:
-            ret1 = seq[: -self.n_prepend, :-1]
             if self.n_prepend == 2:
+                ret1 = seq[:-2, :-1]
                 ret2 = seq[1:-1, :-1]
                 ret = torch.cat((ret1, ret2), dim=-1)
             elif self.n_prepend == 1:
-                ret = ret1
+                ret = seq[:-1, :-1]
 
         seq = seq[self.n_prepend :]
         loss = self.model(seq, retrieved=ret, return_loss=True)
@@ -51,10 +51,6 @@ class LitModel(pl.LightningModule):
     def on_train_batch_end(self, outputs, batch, batch_idx):
         current_lr = self.trainer.optimizers[0].param_groups[0]["lr"]
         self.log("learning_rate", current_lr)
-
-    # def on_train_batch_end(self, outputs, batch, batch_idx):
-    #     loss = outputs['loss'].item()
-    #     self.log_dict({'train/loss': loss}, on_step=True, prog_bar=True, logger=True)
 
     def configure_optimizers(self):
 
@@ -68,9 +64,6 @@ class LitModel(pl.LightningModule):
             optimizer, num_warmup_steps=warmup_steps, num_training_steps=training_steps
         )
 
-        print("-------------------")
-        print(warmup_steps, training_steps)
-
         return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
 
     def validation_step(self, batch, batch_idx):
@@ -79,6 +72,7 @@ class LitModel(pl.LightningModule):
         losses = []
         for fetch_fn in self.retrieve_functions:
             retrieved = fetch_fn(seq, ret=ret, n_prepend=self.n_prepend)
+            # cut the batch size, so that retrieved and continuation seqs would come in batch of same size
             if seq.size(0) == retrieved.size(0):
                 retrieved = retrieved[self.n_prepend :]
             seq_cut = seq[self.n_prepend :]

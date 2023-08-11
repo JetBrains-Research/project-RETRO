@@ -321,7 +321,7 @@ class TrainingWrapper(nn.Module):
     #
     #     sos = SOS_ID * torch.ones(
     #         (past_seq_chunks.shape[0], 1), dtype=torch.bool, device=seq.device
-    #     )  ## TODO dtype=torch.bool
+    #     )
     #     past_seq_chunks = torch.cat((sos, past_seq_chunks), dim=1)
     #
     #     total_neighbors_to_fetch = self.knn_extra_neighbors + self.knn + 1
@@ -369,28 +369,27 @@ class TrainingWrapper(nn.Module):
     #
     #         return knn_chunks_torch
 
-    def fetch_random_chunk(self, seq, ret=None):
+    def fetch_random_chunk(self, seq, ret=None, n_prepend=1):
 
         """
         fetches random chunk from database
         """
 
-        ## TODO !! Rewrite it to fetch sequences, not chunk shape
-
         batch_size = seq.size(0)
         seq_size = self.seq_len // self.chunk_size
-        n_samples = seq_size * batch_size * self.knn
+        n_samples = seq_size * batch_size  # * self.knn
         start_indices = np.random.choice(self.all_chunks.shape[0] - 1, size=n_samples, replace=False)
         selected_pairs = np.array([np.concatenate(self.all_chunks[i : i + 2, :-1]) for i in start_indices])
-        batch_shape = (batch_size, seq_size, self.knn, 2 * self.chunk_size)
+        # batch_shape = (batch_size, seq_size, self.knn, 2 * self.chunk_size)
+        batch_shape = (batch_size, self.seq_len // (n_prepend + 1))
         return torch.tensor(selected_pairs.reshape(batch_shape)).cuda()
 
-    def fetch_none(self, seq, ret=None):
+    def fetch_none(self, seq, ret=None, n_prepend=1):
         return None
 
     def fetch_self_ret(self, seq, ret=None, n_prepend=1):
         ret = torch.reshape(
-            ret[:, :, 0, : 64 * n_prepend],
+            ret[:, :, 0, : self.chunk_size * n_prepend],
             (ret.size(0), ret.size(1) * ret.size(-1) * n_prepend // 2),
         )
         return ret
@@ -411,34 +410,31 @@ class TrainingWrapper(nn.Module):
         """
         fetches random chunk from database
         """
-        # b, seq_len = seq.shape
-        # seq_len = seq_len - 1
-        # seq_chunks = rearrange(seq[:, :-1], "b (n c) -> (b n) c", c=self.chunk_size)
-        # ideal_chunks = torch.cat((seq_chunks[1:], seq_chunks[-1].unsqueeze(0)), dim=0)
-        # ideal_chunks = rearrange(ideal_chunks, "(b n) c -> b n c", c=self.chunk_size, b=b)
-        # ideal_chunks = ideal_chunks.unsqueeze(-2).unsqueeze(-2).repeat(1, 1, 2, 2, 1)
-        # ideal_chunks = ideal_chunks.reshape(b, seq_len // self.chunk_size, 2, 2 * self.chunk_size)
 
         b, seq_len = seq.shape
         seq_len = seq_len - 1
-        seq_chunks = rearrange(seq[:, :-1], "b (n c) -> (b n) c", c=self.chunk_size)
-        ideal_chunks = torch.cat((seq_chunks[1:], seq_chunks[-1].unsqueeze(0)), dim=0)
-        ideal_chunks = torch.cat((seq_chunks, ideal_chunks), dim=-1)
-        ideal_chunks = rearrange(ideal_chunks, "(b n) c -> b n 1 c", c=2 * self.chunk_size, b=b)
-        ideal_chunks = ideal_chunks.repeat(1, 1, 2, 1)
-        ideal_chunks = ideal_chunks.reshape(b, seq_len // self.chunk_size, 2, 2 * self.chunk_size)
+        # seq_chunks = rearrange(seq[:, :-1], "b (n c) -> (b n) c", c=self.chunk_size)
+        # ideal_chunks = torch.cat((seq_chunks[1:], seq_chunks[-1].unsqueeze(0)), dim=0)
+        # ideal_chunks = torch.cat((seq_chunks, ideal_chunks), dim=-1)
+        # ideal_chunks = rearrange(ideal_chunks, "(b n) c -> b n 1 c", c=2 * self.chunk_size, b=b)
+        # ideal_chunks = ideal_chunks.repeat(1, 1, 2, 1)
+        # ideal_chunks = ideal_chunks.reshape(b, seq_len // self.chunk_size, 2, 2 * self.chunk_size)
+
+        ideal_chunks = torch.cat((seq[1:, :-1], seq[-1, :-1].unsqueeze(0)), dim=0)
+        ideal_chunks = torch.cat((seq, ideal_chunks), dim=-1)
 
         return ideal_chunks.cuda()
 
-    def generate_pure_random_chunk(self, seq, ret=None):
+    def generate_pure_random_chunk(self, seq, ret=None, n_prepend=1):
 
         """
-        generates pure random sequence as a chunk
+        generates pure random sequence as a retrieve
         """
 
         batch_size = seq.size(0)
-        seq_size = self.seq_len // self.chunk_size
-        batch_shape = (batch_size, seq_size, self.knn, 2 * self.chunk_size)
+        # seq_size = self.seq_len // self.chunk_size
+        # batch_shape = (batch_size, seq_size, self.knn, 2 * self.chunk_size)
+        batch_shape = (batch_size, self.seq_len // (n_prepend + 1))
         return torch.randint(0, VOCAB_SIZE, batch_shape).cuda()
 
     @torch.no_grad()

@@ -635,7 +635,7 @@ class RETRO(nn.Module):
         # define encoder and decoders
 
         if use_cross_attn:
-
+            ## build encoder only if we are going to use cross-attn approach
             print("Using cross-attn approach")
             self.encoder = Encoder(
                 dim=enc_dim,
@@ -676,7 +676,9 @@ class RETRO(nn.Module):
 
     def forward(self, seq, retrieved=None, return_loss=False, return_itemwise=False, return_recall=False, k_list=[1]):
 
-        seq_len = seq.size(1) - 1
+        seq_len = (
+            seq.size(1) - 1
+        )  # set the length of the target sequence (model size accounts for retrieve concatenation)
 
         if exists(retrieved):
             seq = torch.concat((retrieved, seq), dim=-1)
@@ -695,9 +697,10 @@ class RETRO(nn.Module):
         pos_emb = rearrange(pos_emb, "n d -> 1 n d")
         embed = embed + pos_emb
 
-        embed = self.to_decoder_model_dim(embed)
+        embed = self.to_decoder_model_dim(
+            embed
+        )  ### TODO change the token_emb dimension. Now we do excessive matrix multiplication.
         embed = self.decoder(embed)
-
         embed = embed[:, -seq_len:]
 
         # project to logits
@@ -718,9 +721,7 @@ class RETRO(nn.Module):
             loss = torch.nanmean(loss, dim=1)
 
         if return_recall:
-            # Now for Recall@k calculation:
             recall_at_k = [calculate_recall_at_k(logits, labels, k=k, return_itemwise=return_itemwise) for k in k_list]
-
             return torch.stack([loss.cpu()] + recall_at_k, dim=0).t()
 
         return loss
