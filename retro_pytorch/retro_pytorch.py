@@ -651,7 +651,7 @@ class RETRO(nn.Module):
                 heads=heads,
             )
         else:
-            print("Just concatinating retrieval")
+            print("No cross-attention")
 
         self.decoder = Decoder(
             dim=dec_dim,

@@ -14,20 +14,20 @@ model_hyperparameters:
   dec_attn_dropout: 0.25  # decoder attention dropout
   dec_ff_dropout: 0.25  # decoder feedforward dropout
   use_cross_attn: False
-  n_prepend: 1 # 1 - take only retrieveв chunk, 2 - retrieved chunk and its continuation
 training_params:
   lr: 3e-4 # learning rate
   wd: 0.01
   freq_val: 2000 # 2000 # frequency of validation
-  num_val: 40 # 40 # number of validation steps
-  batch_size: 10
-  batch_size_val: 40 # batch size on validation steps
+  num_val: 100 # 40 # number of validation steps
+  batch_size: 25 # 25 for n_prepend=0, 14 for n_prepend=1, 10 for n_prepend=2
+  batch_size_val: 60 # batch size on validation steps. 40 for n_prepend=2, 60 for n_prepend=0
   batch_accumulation: 60 # number of samples before optimization step
   num_epochs: 1
+  n_prepend: 0 # 0 - no retrieve, base model, 1 - take only retrieved chunk, 2 - retrieved chunk and its continuation
 paths:
-  texts_folder: ../../data/texts_folder_starcoder/
-  data_folder: ../../data/Starcoder/
-  model_folder: ../../data/models/
+  texts_folder: /mnt/data/galimzyanov/data/texts_folder_starcoder/ #../../data/texts_folder_starcoder/
+  data_folder: /mnt/data/galimzyanov/data/data/Starcoder/ #../../data/Starcoder/
+  model_folder: /mnt/data/galimzyanov/data/models/ #../../data/models/
   encoder_path: ../../models/CodeT5p-220M/
   out_folder: ../out_dir_starcoder/
   tmp_path: ./.tmp

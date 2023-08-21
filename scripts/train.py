@@ -20,7 +20,9 @@ from retro_pytorch.retro_pytorch import RETRO
 from retro_pytorch.training import TrainingWrapper
 
 parser = argparse.ArgumentParser(description="")
-parser.add_argument("-no", "--no-retrieve", action="store_true", help="Do not retrieve if flag added")
+parser.add_argument(
+    "-no", "--no-retrieve", action="store_true", help="Add previous sequence during traing if flag added"
+)
 parser.add_argument("-config", "--config", default="config.yaml", help="Config filename")
 parser.add_argument("-project", "--project", default="dev", help="Project name")
 args = parser.parse_args()
@@ -36,17 +38,18 @@ training_params = config.training_params
 retrieve_hyperparams = config.retrieve.hyperparams
 index_params = config.retrieve.hnsw_params
 
-add_flag = "_conc_proj"
-n_prepend = (
-    config.model_hyperparameters.n_prepend
-)  # 1 - take only retrieveв chunk, 2 - retrieved chunk and its continuation
+add_flag = ""
+n_prepend = config.training_params.n_prepend  # 1 - take only retrieveв chunk, 2 - retrieved chunk and its continuation
 config.model_hyperparameters.max_seq_len = (n_prepend + 1) * config.model_hyperparameters.max_seq_len
 
 if no_retrieve:
     add_flag += "_no-ret"
     print("No retrieval during training")
-else:
+elif n_prepend != 0:
     print("Retrieval would be used during training")
+if n_prepend == 0:
+    add_flag += "_base"
+    print("No retrieval, no prepend, base model")
 
 knn_path_train = os.path.join(paths.texts_folder, "knn_from_project.dat")
 
@@ -138,14 +141,21 @@ checkpoint_callback = ModelCheckpoint(
 )
 checkpoint_callback.CHECKPOINT_NAME_LAST = "last" + add_flag
 
+if n_prepend == 0:
+    retrieve_functions_list = [fetch_self_ret]
+    fun_names_list = [""]
+else:
+    retrieve_functions_list = [fetch_self_ret, fetch_previous]
+    fun_names_list = ["", "_previos_seq"]
+
 model = LitModel(
     retro,
     train_parameters=training_params,
     no_retrieve=no_retrieve,
-    n_prepend=n_prepend,  # 1 - prepend only retrieve, without continuation
+    n_prepend=n_prepend,  # 2 - retrieved chunk and its continuation, 1 - prepend only retrieve, without continuation, 0 - no retrieve, base model
     self_retr_fun=fetch_self_ret,
-    retrieve_functions=[fetch_self_ret, fetch_previous],
-    fun_names=["", "_previos_seq"],
+    retrieve_functions=retrieve_functions_list,
+    fun_names=fun_names_list,
 )
 
 trainer = Trainer(

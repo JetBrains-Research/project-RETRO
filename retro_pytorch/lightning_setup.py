@@ -7,6 +7,8 @@ from torch.optim import AdamW
 # from torch.optim.lr_scheduler import StepLR
 from transformers import get_cosine_schedule_with_warmup
 
+from retro_pytorch.retro_pytorch import exists
+
 
 class LitModel(pl.LightningModule):
     def __init__(
@@ -34,7 +36,8 @@ class LitModel(pl.LightningModule):
         seq, ret = batch
         if not self.no_retrieve:
             ret = self.self_retr_fun(seq, ret=ret, n_prepend=self.n_prepend)
-            ret = ret[self.n_prepend :]
+            if exists(ret):
+                ret = ret[self.n_prepend :]
         else:
             if self.n_prepend == 2:
                 ret1 = seq[:-2, :-1]
@@ -42,6 +45,8 @@ class LitModel(pl.LightningModule):
                 ret = torch.cat((ret1, ret2), dim=-1)
             elif self.n_prepend == 1:
                 ret = seq[:-1, :-1]
+            elif self.n_prepend == 0:
+                ret = None
 
         seq = seq[self.n_prepend :]
         loss = self.model(seq, retrieved=ret, return_loss=True)
@@ -73,10 +78,9 @@ class LitModel(pl.LightningModule):
         for fetch_fn in self.retrieve_functions:
             retrieved = fetch_fn(seq, ret=ret, n_prepend=self.n_prepend)
             # cut the batch size, so that retrieved and continuation seqs would come in batch of same size
-            if seq.size(0) == retrieved.size(0):
+            if exists(retrieved) and seq.size(0) == retrieved.size(0):
                 retrieved = retrieved[self.n_prepend :]
             seq_cut = seq[self.n_prepend :]
-
             val_loss = self.model(seq_cut, retrieved=retrieved, return_loss=True, return_recall=True, k_list=[1, 3, 5])
             losses.append(val_loss)
         losses = torch.stack(losses, dim=1)
